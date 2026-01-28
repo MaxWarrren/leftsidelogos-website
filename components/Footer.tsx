@@ -14,7 +14,7 @@ export const Footer: React.FC = () => {
           <div className="space-y-8">
             <div className="flex items-center gap-3 font-display font-bold text-2xl tracking-tighter text-white">
               <img
-                src="/public/LSL_Logo.png"
+                src="/LSL_Logo.png"
                 alt="Left Side Logos"
                 className="h-10 w-auto object-contain brightness-200 contrast-125"
               />

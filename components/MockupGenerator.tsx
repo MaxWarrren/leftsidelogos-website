@@ -258,7 +258,7 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
 
                             {/* Watermark/Label */}
                             <div className="absolute bottom-8 left-10 flex items-center gap-3 opacity-30 select-none pointer-events-none">
-                                <img src="/public/LSL_Logo.png" className="h-4 grayscale" alt="LSL" />
+                                <img src="/LSL_Logo.png" className="h-4 grayscale" alt="LSL" />
                                 <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-lsl-black">Mockup Engine v2.1</span>
                             </div>
                         </div>
