@@ -466,7 +466,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                         <h2 className="text-3xl font-display font-bold text-lsl-black">How will this be decorated?</h2>
                         <p className="text-gray-500 -mt-2">Select all that apply.</p>
                         <div className="grid gap-4">
-                            {(['Screen print', 'Embroidery', 'DTG', 'Not sure'] as DecorationType[]).map(opt => (
+                            {(['Embroidery', 'DTG', 'Not sure'] as DecorationType[]).map(opt => (
                                 <button
                                     key={opt}
                                     onClick={() => toggleItem(orderDraft.selectedDecorationTypes, opt, 'selectedDecorationTypes')}
@@ -675,16 +675,68 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                         </div>
 
                         <button
-                            disabled={!isValidEmail}
-                            onClick={() => {
-                                // Clear storage on submit
-                                localStorage.removeItem('lsl_order_draft');
-                                localStorage.removeItem('lsl_order_step');
-                                nextStep();
+                            disabled={!isValidEmail || isGenerating}
+                            onClick={async () => {
+                                setIsGenerating(true); // Re-use generating state for loading
+                                try {
+                                    const formData = new FormData();
+                                    formData.append('name', orderDraft.contact.name);
+                                    formData.append('email', orderDraft.contact.email);
+                                    formData.append('company', orderDraft.contact.company);
+                                    formData.append('details', JSON.stringify(orderDraft));
+
+                                    // Generate Summary
+                                    // ideally this is done on backend but for now we can pass a simple client string or let backend do it.
+                                    // The plan said "Process/Summarize data (optional AI step)" on backend.
+                                    // But user asked for "AI summary of their order" in the email automation. 
+                                    // Let's create a textual summary here to pass.
+                                    const summary = `${orderDraft.useCase} order. ${orderDraft.quantityRange} items. ${orderDraft.selectedItemTypes.join(', ')} (${orderDraft.selectedColors.join(', ')}).`;
+                                    formData.append('summary', summary);
+
+                                    // Append Logo File
+                                    if (orderDraft.logoFile) {
+                                        formData.append('files', orderDraft.logoFile);
+                                    }
+
+                                    // Append Mockup if it exists (convert base64 to blob)
+                                    if (orderDraft.mockupImageUrl) {
+                                        const res = await fetch(orderDraft.mockupImageUrl);
+                                        const blob = await res.blob();
+                                        formData.append('files', blob, 'mockup.png');
+                                        formData.append('generatedMockup', 'true');
+                                    }
+
+                                    // Send to Portal API
+                                    // Assuming running on localhost:3000 during dev. 
+                                    // In prod this needs to be an env var.
+                                    const PORTAL_API_URL = 'http://localhost:3000/api/leads';
+
+                                    const response = await fetch(PORTAL_API_URL, {
+                                        method: 'POST',
+                                        body: formData
+                                    });
+
+                                    if (!response.ok) {
+                                        const errData = await response.json().catch(() => ({}));
+                                        console.error("Server Error:", errData);
+                                        throw new Error(`Server responded with ${response.status}: ${errData.error || 'Unknown Error'}`);
+                                    }
+
+                                    // Clear storage on success
+                                    localStorage.removeItem('lsl_order_draft');
+                                    localStorage.removeItem('lsl_order_step');
+                                    nextStep();
+                                } catch (e: any) {
+                                    console.error("Submission failed", e);
+                                    alert(`Something went wrong: ${e.message || "Please check your connection and try again."}`);
+                                    // Keep them on the same page so they can retry
+                                } finally {
+                                    setIsGenerating(false);
+                                }
                             }}
-                            className="w-full py-5 bg-lsl-blue text-white rounded-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl transition-all"
+                            className="w-full py-5 bg-lsl-blue text-white rounded-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl transition-all flex items-center justify-center gap-2"
                         >
-                            Submit Request
+                            {isGenerating ? <Loader2 className="animate-spin" /> : "Submit Request"}
                         </button>
                     </div>
                 );

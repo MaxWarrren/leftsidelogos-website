@@ -77,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
             className="flex items-center gap-3 group"
           >
             <img
-              src="/images/LSL_Logo.png"
+              src="/public/LSL_Logo.png"
               alt="Left Side Logos"
               className={`h-10 w-auto object-contain transition-all duration-300 ${scrolled ? 'brightness-200 contrast-125' : ''}`}
             />

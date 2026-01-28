@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Mapping the local images stored in the /images directory
+// Mapping the local images stored in the /public directory
 // These match the functions: Hats, Koozies/Promo, Hoodies, Shirts, and Decals
 const IMAGES = [
-  "/images/AboutUs-1.jpg",
-  "/images/AboutUs-2.jpg",
-  "/images/AboutUs-3.jpg",
-  "/images/AboutUs-4.jpg",
-  "/images/AboutUs-5.jpg"
+  "/public/AboutUs-1.jpg",
+  "/public/AboutUs-2.jpg",
+  "/public/AboutUs-3.jpg",
+  "/public/AboutUs-4.jpg",
+  "/public/AboutUs-5.jpg"
 ];
 
 export const About: React.FC = () => {
