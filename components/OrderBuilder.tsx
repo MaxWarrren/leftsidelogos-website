@@ -685,12 +685,38 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                                     formData.append('company', orderDraft.contact.company);
                                     formData.append('details', JSON.stringify(orderDraft));
 
-                                    // Generate Summary
-                                    // ideally this is done on backend but for now we can pass a simple client string or let backend do it.
-                                    // The plan said "Process/Summarize data (optional AI step)" on backend.
-                                    // But user asked for "AI summary of their order" in the email automation. 
-                                    // Let's create a textual summary here to pass.
-                                    const summary = `${orderDraft.useCase} order. ${orderDraft.quantityRange} items. ${orderDraft.selectedItemTypes.join(', ')} (${orderDraft.selectedColors.join(', ')}).`;
+                                    // Generate AI Summary
+                                    let summary = `${orderDraft.useCase} order. ${orderDraft.quantityRange} items. ${orderDraft.selectedItemTypes.join(', ')}.`;
+
+                                    try {
+                                        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+
+                                        const prompt = `You are a sales assistant. Write a single, concise sentence summarizing this lead for a CRM dashboard.
+                                        Highlight the Use Case, Quantity, Products, and Timeline.
+                                        Input Data: ${JSON.stringify({
+                                            useCase: orderDraft.useCase,
+                                            quantity: orderDraft.quantityRange,
+                                            timeline: orderDraft.timeline,
+                                            items: orderDraft.selectedItemTypes,
+                                            brands: orderDraft.selectedBrands,
+                                            decoration: orderDraft.selectedDecorationTypes
+                                        })}
+                                        `;
+
+                                        const response = await ai.models.generateContent({
+                                            model: 'gemini-1.5-flash',
+                                            contents: [
+                                                { parts: [{ text: prompt }] }
+                                            ]
+                                        });
+
+                                        if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) {
+                                            summary = response.candidates[0].content.parts[0].text;
+                                        }
+                                    } catch (e) {
+                                        console.warn("AI Summary failed, using fallback", e);
+                                    }
+
                                     formData.append('summary', summary);
 
                                     // Append Logo File
@@ -707,9 +733,9 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                                     }
 
                                     // Send to Portal API
-                                    // Assuming running on localhost:3000 during dev. 
-                                    // In prod this needs to be an env var.
-                                    const PORTAL_API_URL = 'http://localhost:3000/api/leads';
+                                    const PORTAL_API_URL = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3000/api/leads';
+
+                                    console.log("Submitting to:", PORTAL_API_URL); // Debug log
 
                                     const response = await fetch(PORTAL_API_URL, {
                                         method: 'POST',
