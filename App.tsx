@@ -41,7 +41,7 @@ function App() {
           <MockupGenerator onSwitchToQuote={() => navigateTo('build-order')} />
         )}
         {currentPage === 'build-order' && (
-          <BuildOrderPage />
+          <BuildOrderPage onNavigateToMockup={() => navigateTo('mockup')} />
         )}
         {currentPage === 'contact' && (
           <ContactPage />

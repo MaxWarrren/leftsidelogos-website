@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronRight, ChevronLeft, Upload, Loader2, Sparkles, X, Mail, Maximize2, Send, ShoppingBag, ArrowRight } from 'lucide-react';
+
 import { GoogleGenAI } from "@google/genai";
 import Cal, { getCalApi } from "@calcom/embed-react";
 import { cn } from '../lib/utils';
@@ -59,7 +60,7 @@ const COLORS = [
     { name: 'Safety Green', hex: '#E7F538' },
 ];
 
-export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) => {
+export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: () => void }> = ({ className, onNavigateToMockup }) => {
     // State
     const [step, setStep] = useState(1);
     const [direction, setDirection] = useState(0);
@@ -184,88 +185,8 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
     }, [step, orderDraft.selectedItemTypes, orderDraft.customItemType, orderDraft.selectedBrands, orderDraft.quantityRange]);
 
 
-    // Mockup Generation Logic 
-    const generateMockup = async (specificFile?: File) => {
-        const fileToUse = specificFile || orderDraft.logoFiles[0];
-        if (!fileToUse) {
-            alert("No logo file found. Please upload a logo in the previous step.");
-            return;
-        }
 
-        setIsGenerating(true);
-        try {
-            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
-            const reader = new FileReader();
-            reader.readAsDataURL(fileToUse);
-            reader.onload = async () => {
-                const base64Image = (reader.result as string).split(',')[1];
 
-                // Dynamic prompt based on selections
-                const itemType = orderDraft.selectedItemTypes[0] || orderDraft.customItemType || "Apparel";
-                const color = orderDraft.customColor || "White";
-
-                const prompt = `Create a photorealistic product mockup.
-             PRODUCT: ${itemType} in ${color}.
-             ANGLE: ${orderDraft.viewAngle}.
-             LOGO: Place the uploaded logo naturally on the product.
-             STYLE: Professional studio photography, centered, 4k, on a PLAIN WHITE BACKGROUND.
-             DETAILS: ${orderDraft.mockupPrompt}.
-             `;
-
-                try {
-                    // Using gemini-1.5-flash for multimodal input capabilities
-                    // Note: Standard Gemini models return text. Image generation usually requires Imagen model.
-                    // However, we will attempt to use the model configured or fallback to a standard one.
-                    // If the user expects image generation, they might have access to a specific model.
-                    // We will use 'gemini-1.5-flash' as a safe default for now, or 'gemini-2.0-flash-exp' if preferred.
-                    const response = await ai.models.generateContent({
-                        model: 'gemini-2.0-flash-exp',
-                        contents: {
-                            role: "user",
-                            parts: [
-                                { text: prompt },
-                                {
-                                    inlineData: {
-                                        mimeType: fileToUse.type || 'image/png',
-                                        data: base64Image
-                                    }
-                                }
-                            ]
-                        }
-                    });
-
-                    let imageDataUrl: string | null = null;
-
-                    if (response.candidates && response.candidates[0].content.parts) {
-                        for (const part of response.candidates[0].content.parts) {
-                            if (part.inlineData) {
-                                imageDataUrl = `data:image/png;base64,${part.inlineData.data}`;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (imageDataUrl) {
-                        updateDraft({ mockupImageUrl: imageDataUrl });
-                    } else {
-                        // Fallback/Error if no image returned
-                        console.warn("No image data returned from AI");
-                        alert("The AI generated a text description instead of an image. Please try again or check model configuration.");
-                    }
-
-                } catch (e) {
-                    console.error("Gemini API call failed", e);
-                    throw e;
-                }
-
-                setIsGenerating(false);
-            };
-        } catch (e) {
-            console.error("Mockup generation failed", e);
-            setIsGenerating(false);
-            alert("Failed to generate mockup. Please try again.");
-        }
-    };
 
 
     // --- Render Steps ---
@@ -571,127 +492,35 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                         </div>
                         <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleMultiUpload} className="hidden" />
 
-                        <div className="pt-6 space-y-4">
+                        <div className="pt-6 space-y-3">
                             <button
-                                disabled={!hasLogos}
-                                onClick={() => { updateDraft({ wantsMockup: true }); nextStep(); }}
-                                className="w-full p-6 rounded-[2rem] bg-lsl-black text-white text-left hover:shadow-2xl transition-all group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={orderDraft.logoFiles.length === 0}
+                                onClick={nextStep}
+                                className="w-full py-5 bg-lsl-black text-white rounded-2xl font-bold hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <div className="relative z-10 flex items-center justify-between">
-                                    <div>
-                                        <span className="block text-xl font-bold mb-1">Generate AI Mockup</span>
-                                        <span className="text-white/60 text-sm">Visualize your logo on the product instantly</span>
-                                    </div>
-                                    <Sparkles className="text-yellow-300" />
-                                </div>
+                                Continue to Details <ArrowRight size={18} />
                             </button>
 
-                            <button
-                                disabled={!hasLogos}
-                                onClick={() => { updateDraft({ wantsMockup: false }); setStep(11); }}
-                                className="w-full p-6 rounded-[2rem] border-2 border-gray-100 text-gray-600 font-medium hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Skip & Finalize Order
-                            </button>
+                            <div className="bg-blue-50/50 rounded-2xl p-6 text-center space-y-3 border border-blue-100">
+                                <div className="flex items-center justify-center gap-2 text-lsl-blue font-bold">
+                                    <Sparkles size={18} />
+                                    <span>Want to see a preview?</span>
+                                </div>
+                                <p className="text-sm text-gray-500">
+                                    Try our standalone Mockup Studio to visualize your logo on products before ordering.
+                                </p>
+                                <button
+                                    onClick={() => onNavigateToMockup && onNavigateToMockup()}
+                                    className="text-sm font-bold text-lsl-blue hover:underline hover:text-lsl-black transition-colors"
+                                >
+                                    Open Mockup Studio &rarr;
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );
-            case 10: // Full Mockup Studio
-                return (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-3xl font-display font-bold text-lsl-black">Mockup Studio</h2>
-                            <button onClick={() => nextStep()} className="text-sm text-gray-400 hover:text-black underline">Skip</button>
-                        </div>
 
-                        {/* Controls */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">View</label>
-                                <select
-                                    value={orderDraft.viewAngle}
-                                    onChange={(e) => updateDraft({ viewAngle: e.target.value })}
-                                    className="w-full p-3 bg-gray-50 border-none rounded-xl text-sm font-medium"
-                                >
-                                    <option>Front View</option><option>Back View</option><option>Model</option><option>Flat Lay</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Format</label>
-                                <select
-                                    value={orderDraft.aspectRatio}
-                                    onChange={(e) => updateDraft({ aspectRatio: e.target.value as any })}
-                                    className="w-full p-3 bg-gray-50 border-none rounded-xl text-sm font-medium"
-                                >
-                                    <option value="1:1">Square (1:1)</option><option value="4:3">Standard (4:3)</option><option value="16:9">Wide (16:9)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Upload & Preview */}
-                        <div
-                            className={`border-2 border-dashed rounded-[2rem] min-h-[300px] flex flex-col transition-all overflow-hidden relative ${orderDraft.mockupImageUrl ? 'border-none p-0' : 'p-6'
-                                } ${orderDraft.logoPreviewUrls.length > 0 && !orderDraft.mockupImageUrl ? 'border-lsl-blue bg-blue-50/10' : 'border-gray-200'}`}
-                        >
-                            {orderDraft.mockupImageUrl ? (
-                                <div className="relative group/image">
-                                    <img src={orderDraft.mockupImageUrl} className="w-full rounded-[2rem]" alt="AI Render" />
-                                    <button
-                                        onClick={() => updateDraft({ mockupImageUrl: null })}
-                                        className="absolute top-4 right-4 bg-white p-2 rounded-full shadow-lg opacity-0 group-hover/image:opacity-100 transition-opacity"
-                                    >
-                                        <X size={16} />
-                                    </button>
-                                    <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-lsl-blue">AI Generated</div>
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Mockup Generator only uses the first logo for now to keep it simple */}
-                                    {orderDraft.logoPreviewUrls[0] ? (
-                                        <div className="flex-grow flex flex-col items-center justify-center space-y-4">
-                                            <div className="h-32 w-32 relative">
-                                                <img src={orderDraft.logoPreviewUrls[0]} className="w-full h-full object-contain" alt="Logo" />
-                                            </div>
-                                            <textarea
-                                                placeholder="Add styling notes (e.g. vintage texture, cinematic lighting)..."
-                                                value={orderDraft.mockupPrompt}
-                                                onChange={(e) => updateDraft({ mockupPrompt: e.target.value })}
-                                                className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs h-20 resize-none"
-                                            />
-                                            <button
-                                                onClick={async () => {
-                                                    // Pass the first file explicitly
-                                                    if (orderDraft.logoFiles[0]) {
-                                                        await generateMockup(orderDraft.logoFiles[0]);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="w-full py-3 bg-lsl-black text-white rounded-xl font-bold flex items-center justify-center gap-2"
-                                            >
-                                                {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                                                Generate
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex-grow flex flex-col items-center justify-center text-center p-8">
-                                            <p className="text-gray-400">Please go back to step 9 to upload a logo first.</p>
-                                            <button onClick={prevStep} className="mt-4 text-lsl-blue font-bold hover:underline">Go Back</button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={nextStep}
-                            className="w-full py-5 bg-lsl-black text-white rounded-2xl font-bold hover:shadow-xl transition-all flex items-center justify-center gap-2"
-                        >
-                            Finish & Contact Info <ArrowRight size={18} />
-                        </button>
-                    </div>
-                );
-
-            case 11: // Contact Info
+            case 10: // Contact Info
                 const isValidEmail = orderDraft.contact.email.includes('@') && orderDraft.contact.email.includes('.');
 
                 return (
@@ -819,7 +648,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                     </div>
                 );
 
-            case 12: // Confirmation (General + Cal.com)
+            case 11: // Confirmation (General + Cal.com)
                 return (
                     <div className="text-center space-y-8 pt-8 relative">
                         <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -884,7 +713,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
         }
     };
 
-    const totalSteps = 12;
+    const totalSteps = 11;
 
     // --- Main Layout ---
     return (
@@ -893,7 +722,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
 
                 {/* Header / Nav */}
                 <div className="mb-12 flex items-center justify-between">
-                    {step > 1 && step < 12 ? (
+                    {step > 1 && step < 11 ? (
                         <button onClick={prevStep} className="p-2 -ml-2 text-gray-400 hover:text-lsl-black">
                             <ChevronLeft />
                         </button>
@@ -901,7 +730,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                         <div />
                     )}
 
-                    {step < 12 && (
+                    {step < 11 && (
                         <div className="text-xs font-bold uppercase tracking-widest text-gray-300">
                             Step {step} of {totalSteps}
                         </div>
