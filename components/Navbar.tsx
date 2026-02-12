@@ -3,14 +3,15 @@ import { motion, useScroll, useMotionValueEvent } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 
 interface NavbarProps {
-  currentPage: 'home' | 'mockup' | 'contact';
-  setCurrentPage: (page: 'home' | 'mockup' | 'contact') => void;
+  currentPage: 'home' | 'mockup' | 'contact' | 'build-order';
+  setCurrentPage: (page: 'home' | 'mockup' | 'contact' | 'build-order') => void;
 }
 
 const navItems = [
   { name: 'Home', href: '#home', page: 'home' },
   { name: 'About', href: '#about', page: 'home' },
   { name: 'Mockup Studio', href: '#', page: 'mockup' },
+  { name: 'Build Order', href: '#', page: 'build-order' },
   { name: 'Contact', href: '#', page: 'contact' },
 ];
 

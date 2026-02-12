@@ -7,9 +7,10 @@ import { Footer } from './components/Footer';
 
 import { MockupGenerator } from './components/MockupGenerator';
 import { ContactPage } from './components/ContactPage';
+import { BuildOrderPage } from './components/BuildOrderPage';
 import { BottomCTA } from './components/BottomCTA';
 
-type Page = 'home' | 'mockup' | 'contact';
+type Page = 'home' | 'mockup' | 'contact' | 'build-order';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -29,15 +30,18 @@ function App() {
       <main className="flex-grow">
         {currentPage === 'home' && (
           <>
-            <Hero onStartDesigning={() => navigateTo('contact')} />
+            <Hero onStartDesigning={() => navigateTo('build-order')} />
             <About />
             <Services />
-            <BottomCTA onStartDesigning={() => navigateTo('contact')} />
+            <BottomCTA onStartDesigning={() => navigateTo('build-order')} />
           </>
         )}
 
         {currentPage === 'mockup' && (
-          <MockupGenerator onSwitchToQuote={() => navigateTo('contact')} />
+          <MockupGenerator onSwitchToQuote={() => navigateTo('build-order')} />
+        )}
+        {currentPage === 'build-order' && (
+          <BuildOrderPage />
         )}
         {currentPage === 'contact' && (
           <ContactPage />

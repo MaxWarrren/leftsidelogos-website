@@ -25,12 +25,13 @@ interface OrderDraft {
     customBrand: string;
     selectedColors: string[];
     customColor: string;
-    decorationType: DecorationType | null; // Keep for backward compat or transition if needed, but we'll use selectedDecorationTypes
+    decorationType: DecorationType | null; // Keep for backward compat
     selectedDecorationTypes: DecorationType[];
+    logoPlacement: string; // New field
     priceEstimate: string | null;
     wantsMockup: boolean | null;
-    logoFile: File | null; // Note: Files cannot be persisted in localStorage easily
-    logoPreviewUrl: string | null;
+    logoFiles: File[]; // Changed from logoFile to array
+    logoPreviewUrls: string[]; // Changed from single URL
     mockupImageUrl: string | null;
     mockupPrompt: string;
     viewAngle: string;
@@ -78,10 +79,11 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
         customColor: '',
         decorationType: null,
         selectedDecorationTypes: [],
+        logoPlacement: '',
         priceEstimate: null,
         wantsMockup: null,
-        logoFile: null,
-        logoPreviewUrl: null,
+        logoFiles: [],
+        logoPreviewUrls: [],
         mockupImageUrl: null,
         mockupPrompt: '',
         viewAngle: 'Front View',
@@ -111,7 +113,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
 
     useEffect(() => {
         // Save state on change, excluding non-serializable fields if needed (though simple JSON.stringify handles basic objs)
-        const toSave = { ...orderDraft, logoFile: null, logoPreviewUrl: null, mockupImageUrl: null }; // Avoid saving huge base64 strings if desired, keeping mockup for now if url is short
+        const toSave = { ...orderDraft, logoFiles: [], logoPreviewUrls: [], mockupImageUrl: null }; // Avoid saving huge base64 strings if desired
         localStorage.setItem('lsl_order_draft', JSON.stringify(toSave));
         localStorage.setItem('lsl_order_step', step.toString());
     }, [orderDraft, step]);
@@ -183,60 +185,85 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
 
 
     // Mockup Generation Logic 
-    const generateMockup = async () => {
-        if (!orderDraft.logoFile) return;
+    const generateMockup = async (specificFile?: File) => {
+        const fileToUse = specificFile || orderDraft.logoFiles[0];
+        if (!fileToUse) {
+            alert("No logo file found. Please upload a logo in the previous step.");
+            return;
+        }
 
         setIsGenerating(true);
         try {
             const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
             const reader = new FileReader();
-            reader.readAsDataURL(orderDraft.logoFile);
+            reader.readAsDataURL(fileToUse);
             reader.onload = async () => {
                 const base64Image = (reader.result as string).split(',')[1];
 
                 // Dynamic prompt based on selections
                 const itemType = orderDraft.selectedItemTypes[0] || orderDraft.customItemType || "Apparel";
-                const color = orderDraft.selectedColors[0] || "White";
+                const color = orderDraft.customColor || "White";
 
                 const prompt = `Create a photorealistic product mockup.
              PRODUCT: ${itemType} in ${color}.
              ANGLE: ${orderDraft.viewAngle}.
              LOGO: Place the uploaded logo naturally on the product.
-             STYLE: Professional studio photography, centered, 4k.
+             STYLE: Professional studio photography, centered, 4k, on a PLAIN WHITE BACKGROUND.
              DETAILS: ${orderDraft.mockupPrompt}.
              `;
 
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
-                    contents: {
-                        parts: [
-                            { text: prompt },
-                            {
-                                inlineData: {
-                                    mimeType: orderDraft.logoFile?.type || 'image/png',
-                                    data: base64Image
+                try {
+                    // Using gemini-1.5-flash for multimodal input capabilities
+                    // Note: Standard Gemini models return text. Image generation usually requires Imagen model.
+                    // However, we will attempt to use the model configured or fallback to a standard one.
+                    // If the user expects image generation, they might have access to a specific model.
+                    // We will use 'gemini-1.5-flash' as a safe default for now, or 'gemini-2.0-flash-exp' if preferred.
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-2.0-flash-exp',
+                        contents: {
+                            role: "user",
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inlineData: {
+                                        mimeType: fileToUse.type || 'image/png',
+                                        data: base64Image
+                                    }
                                 }
-                            }
-                        ]
-                    },
-                    config: {
-                        imageConfig: { aspectRatio: orderDraft.aspectRatio }
-                    }
-                });
+                            ]
+                        }
+                    });
 
-                if (response.candidates && response.candidates[0].content.parts) {
-                    for (const part of response.candidates[0].content.parts) {
-                        if (part.inlineData) {
-                            updateDraft({ mockupImageUrl: `data:image/png;base64,${part.inlineData.data}` });
-                            break;
+                    let imageDataUrl: string | null = null;
+
+                    if (response.candidates && response.candidates[0].content.parts) {
+                        for (const part of response.candidates[0].content.parts) {
+                            if (part.inlineData) {
+                                imageDataUrl = `data:image/png;base64,${part.inlineData.data}`;
+                                break;
+                            }
                         }
                     }
+
+                    if (imageDataUrl) {
+                        updateDraft({ mockupImageUrl: imageDataUrl });
+                    } else {
+                        // Fallback/Error if no image returned
+                        console.warn("No image data returned from AI");
+                        alert("The AI generated a text description instead of an image. Please try again or check model configuration.");
+                    }
+
+                } catch (e) {
+                    console.error("Gemini API call failed", e);
+                    throw e;
                 }
+
                 setIsGenerating(false);
             };
         } catch (e) {
             console.error("Mockup generation failed", e);
             setIsGenerating(false);
+            alert("Failed to generate mockup. Please try again.");
         }
     };
 
@@ -413,40 +440,18 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                     </div>
                 );
             case 6: // Colors (Renumbered from 5 duplicate)
-                const canContinueColorRenamed = orderDraft.selectedColors.length > 0 || orderDraft.customColor.length > 0;
+                const canContinueColorRenamed = orderDraft.customColor.length > 0;
                 return (
                     <div className="space-y-6">
                         <h2 className="text-3xl font-display font-bold text-lsl-black">What colors do you need?</h2>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {COLORS.map(c => (
-                                <button
-                                    key={c.name}
-                                    onClick={() => toggleItem(orderDraft.selectedColors, c.name, 'selectedColors')}
-                                    className={`group p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 bg-white ${orderDraft.selectedColors.includes(c.name) ? 'border-lsl-blue ring-2 ring-blue-50' : 'border-gray-100 hover:border-lsl-blue'
-                                        }`}
-                                >
-                                    <div
-                                        className={`w-12 h-12 rounded-full shadow-sm ${c.border ? 'border border-gray-200' : ''}`}
-                                        style={{ backgroundColor: c.hex }}
-                                    />
-                                    <div className="text-center">
-                                        <span className="text-sm font-bold text-gray-700 block">{c.name}</span>
-                                        {orderDraft.selectedColors.includes(c.name) && <Check size={14} className="mx-auto mt-1 text-lsl-blue" />}
-                                    </div>
-                                    <ChevronRight className={`transition-opacity text-lsl-blue ${orderDraft.selectedColors.includes(c.name) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            ))}
-                        </div>
+                        <p className="text-gray-500 -mt-2">List the colors you are looking for.</p>
 
                         <div className="pt-2">
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 ml-2 mb-2 block">Custom Color / Code</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. Cardinal Red, PMS 123C"
+                            <textarea
+                                placeholder="e.g. Black, Navy, Cardinal Red, PMS 123C..."
                                 value={orderDraft.customColor}
                                 onChange={(e) => updateDraft({ customColor: e.target.value })}
-                                className="w-full p-4 rounded-2xl border-2 border-gray-200 outline-none focus:border-lsl-blue"
+                                className="w-full p-5 rounded-2xl border-2 border-gray-200 outline-none focus:border-lsl-blue min-h-[150px] text-lg"
                             />
                         </div>
 
@@ -514,18 +519,67 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                     </div>
                 );
 
-            case 9: // Mockup Decision
+            case 9: // Upload Logos & Mockup Decision
+                const handleMultiUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                        const newFiles = Array.from(e.target.files).slice(0, 3 - orderDraft.logoFiles.length);
+                        const newUrls = newFiles.map(file => URL.createObjectURL(file));
+
+                        updateDraft({
+                            logoFiles: [...orderDraft.logoFiles, ...newFiles],
+                            logoPreviewUrls: [...orderDraft.logoPreviewUrls, ...newUrls]
+                        });
+                    }
+                };
+
+                const removeFile = (index: number) => {
+                    const newFiles = [...orderDraft.logoFiles];
+                    const newUrls = [...orderDraft.logoPreviewUrls];
+                    newFiles.splice(index, 1);
+                    newUrls.splice(index, 1);
+                    updateDraft({ logoFiles: newFiles, logoPreviewUrls: newUrls });
+                };
+
+                const hasLogos = orderDraft.logoFiles.length > 0;
+
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-3xl font-display font-bold text-lsl-black">Would you like to see a mockup?</h2>
-                        <div className="grid gap-4">
+                        <h2 className="text-3xl font-display font-bold text-lsl-black">Upload your logos</h2>
+                        <p className="text-gray-500 -mt-2">Please upload at least one logo (Max 3).</p>
+
+                        <div className="grid grid-cols-3 gap-4">
+                            {orderDraft.logoPreviewUrls.map((url, i) => (
+                                <div key={i} className="relative aspect-square bg-white rounded-xl border border-gray-200 p-2 flex items-center justify-center">
+                                    <img src={url} className="w-full h-full object-contain" alt={`Logo ${i + 1}`} />
+                                    <button
+                                        onClick={() => removeFile(i)}
+                                        className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1 hover:bg-red-200"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                            {orderDraft.logoFiles.length < 3 && (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-lsl-blue hover:text-lsl-blue hover:bg-blue-50/10 transition-all"
+                                >
+                                    <Upload size={24} />
+                                    <span className="text-xs font-bold mt-2">Add Logo</span>
+                                </button>
+                            )}
+                        </div>
+                        <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleMultiUpload} className="hidden" />
+
+                        <div className="pt-6 space-y-4">
                             <button
+                                disabled={!hasLogos}
                                 onClick={() => { updateDraft({ wantsMockup: true }); nextStep(); }}
-                                className="w-full p-8 rounded-[2rem] bg-lsl-black text-white text-left hover:shadow-2xl transition-all group relative overflow-hidden"
+                                className="w-full p-6 rounded-[2rem] bg-lsl-black text-white text-left hover:shadow-2xl transition-all group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <div className="relative z-10 flex items-center justify-between">
                                     <div>
-                                        <span className="block text-xl font-bold mb-1">Yes, open the studio</span>
+                                        <span className="block text-xl font-bold mb-1">Generate AI Mockup</span>
                                         <span className="text-white/60 text-sm">Visualize your logo on the product instantly</span>
                                     </div>
                                     <Sparkles className="text-yellow-300" />
@@ -533,23 +587,16 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                             </button>
 
                             <button
-                                onClick={() => { updateDraft({ wantsMockup: false }); setStep(11); /* Skip to contact (was 10) */ }}
-                                className="w-full p-6 rounded-[2rem] border-2 border-gray-100 text-gray-600 font-medium hover:bg-gray-50 transition-all"
+                                disabled={!hasLogos}
+                                onClick={() => { updateDraft({ wantsMockup: false }); setStep(11); }}
+                                className="w-full p-6 rounded-[2rem] border-2 border-gray-100 text-gray-600 font-medium hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Skip for now
+                                Skip & Finalize Order
                             </button>
                         </div>
                     </div>
                 );
             case 10: // Full Mockup Studio
-                const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-                    if (e.target.files && e.target.files[0]) {
-                        const file = e.target.files[0];
-                        const url = URL.createObjectURL(file);
-                        updateDraft({ logoFile: file, logoPreviewUrl: url });
-                    }
-                };
-
                 return (
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
@@ -584,7 +631,7 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                         {/* Upload & Preview */}
                         <div
                             className={`border-2 border-dashed rounded-[2rem] min-h-[300px] flex flex-col transition-all overflow-hidden relative ${orderDraft.mockupImageUrl ? 'border-none p-0' : 'p-6'
-                                } ${orderDraft.logoPreviewUrl && !orderDraft.mockupImageUrl ? 'border-lsl-blue bg-blue-50/10' : 'border-gray-200'}`}
+                                } ${orderDraft.logoPreviewUrls.length > 0 && !orderDraft.mockupImageUrl ? 'border-lsl-blue bg-blue-50/10' : 'border-gray-200'}`}
                         >
                             {orderDraft.mockupImageUrl ? (
                                 <div className="relative group/image">
@@ -599,14 +646,11 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                                 </div>
                             ) : (
                                 <>
-                                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-
-                                    {/* Has Logo but no generation yet */}
-                                    {orderDraft.logoPreviewUrl ? (
+                                    {/* Mockup Generator only uses the first logo for now to keep it simple */}
+                                    {orderDraft.logoPreviewUrls[0] ? (
                                         <div className="flex-grow flex flex-col items-center justify-center space-y-4">
                                             <div className="h-32 w-32 relative">
-                                                <img src={orderDraft.logoPreviewUrl} className="w-full h-full object-contain" alt="Logo" />
-                                                <button onClick={() => updateDraft({ logoFile: null, logoPreviewUrl: null })} className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1"><X size={12} /></button>
+                                                <img src={orderDraft.logoPreviewUrls[0]} className="w-full h-full object-contain" alt="Logo" />
                                             </div>
                                             <textarea
                                                 placeholder="Add styling notes (e.g. vintage texture, cinematic lighting)..."
@@ -615,7 +659,12 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                                                 className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs h-20 resize-none"
                                             />
                                             <button
-                                                onClick={generateMockup}
+                                                onClick={async () => {
+                                                    // Pass the first file explicitly
+                                                    if (orderDraft.logoFiles[0]) {
+                                                        await generateMockup(orderDraft.logoFiles[0]);
+                                                    }
+                                                }}
                                                 disabled={isGenerating}
                                                 className="w-full py-3 bg-lsl-black text-white rounded-xl font-bold flex items-center justify-center gap-2"
                                             >
@@ -624,10 +673,9 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                                             </button>
                                         </div>
                                     ) : (
-                                        <div onClick={() => fileInputRef.current?.click()} className="flex-grow flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 rounded-xl transition-colors">
-                                            <Upload className="mb-4 text-gray-300" size={32} />
-                                            <p className="font-bold text-gray-500">Upload Logo</p>
-                                            <p className="text-xs text-gray-400 mt-2 text-center px-4">Click to select artwork for your mockup</p>
+                                        <div className="flex-grow flex flex-col items-center justify-center text-center p-8">
+                                            <p className="text-gray-400">Please go back to step 9 to upload a logo first.</p>
+                                            <button onClick={prevStep} className="mt-4 text-lsl-blue font-bold hover:underline">Go Back</button>
                                         </div>
                                     )}
                                 </>
@@ -677,34 +725,44 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                         <button
                             disabled={!isValidEmail || isGenerating}
                             onClick={async () => {
-                                setIsGenerating(true); // Re-use generating state for loading
+                                setIsGenerating(true);
                                 try {
                                     const formData = new FormData();
                                     formData.append('name', orderDraft.contact.name);
                                     formData.append('email', orderDraft.contact.email);
                                     formData.append('company', orderDraft.contact.company);
-                                    formData.append('details', JSON.stringify(orderDraft));
+
+                                    // Serialize details excluding big files
+                                    const detailsToSave = { ...orderDraft, logoFiles: undefined, logoPreviewUrls: undefined, mockupImageUrl: undefined };
+                                    formData.append('details', JSON.stringify(detailsToSave));
 
                                     // Generate AI Summary
-                                    let summary = `${orderDraft.useCase} order. ${orderDraft.quantityRange} items. ${orderDraft.selectedItemTypes.join(', ')}.`;
+                                    let summary = `${orderDraft.useCase} order. ${orderDraft.quantityRange} items.`;
 
                                     try {
                                         const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
 
-                                        const prompt = `You are a sales assistant. Write a single, concise sentence summarizing this lead for a CRM dashboard.
-                                        Highlight the Use Case, Quantity, Products, and Timeline.
+                                        const prompt = `You are a professional sales assistant for a custom apparel company. 
+                                        Write a detailed but concise paragraph summarizing this lead for our CRM.
+                                        Include the Use Case, Quantity, Timeline, Specific Products, Brands, Colors, and Decoration methods.
+                                        
                                         Input Data: ${JSON.stringify({
                                             useCase: orderDraft.useCase,
                                             quantity: orderDraft.quantityRange,
                                             timeline: orderDraft.timeline,
                                             items: orderDraft.selectedItemTypes,
+                                            customItem: orderDraft.customItemType,
                                             brands: orderDraft.selectedBrands,
-                                            decoration: orderDraft.selectedDecorationTypes
+                                            colors: orderDraft.selectedColors,
+                                            customColor: orderDraft.customColor,
+                                            decoration: orderDraft.selectedDecorationTypes,
+                                            placement: orderDraft.logoPlacement,
+                                            mockupPrompt: orderDraft.mockupPrompt
                                         })}
                                         `;
 
                                         const response = await ai.models.generateContent({
-                                            model: 'gemini-1.5-flash',
+                                            model: 'gemini-2.0-flash-lite-preview-02-05',
                                             contents: [
                                                 { parts: [{ text: prompt }] }
                                             ]
@@ -719,23 +777,20 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
 
                                     formData.append('summary', summary);
 
-                                    // Append Logo File
-                                    if (orderDraft.logoFile) {
-                                        formData.append('files', orderDraft.logoFile);
-                                    }
+                                    // Append Logo Files
+                                    orderDraft.logoFiles.forEach(file => {
+                                        formData.append('files', file);
+                                    });
 
-                                    // Append Mockup if it exists (convert base64 to blob)
+                                    // Append Mockup if it exists
                                     if (orderDraft.mockupImageUrl) {
                                         const res = await fetch(orderDraft.mockupImageUrl);
                                         const blob = await res.blob();
-                                        formData.append('files', blob, 'mockup.png');
+                                        formData.append('files', blob, 'mockup_generated.png');
                                         formData.append('generatedMockup', 'true');
                                     }
 
-                                    // Send to Portal API
                                     const PORTAL_API_URL = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3000/api/leads';
-
-                                    console.log("Submitting to:", PORTAL_API_URL); // Debug log
 
                                     const response = await fetch(PORTAL_API_URL, {
                                         method: 'POST',
@@ -743,19 +798,16 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                                     });
 
                                     if (!response.ok) {
-                                        const errData = await response.json().catch(() => ({}));
-                                        console.error("Server Error:", errData);
-                                        throw new Error(`Server responded with ${response.status}: ${errData.error || 'Unknown Error'}`);
+                                        throw new Error(`Server responded with ${response.status}`);
                                     }
 
-                                    // Clear storage on success
+                                    // Clear storage
                                     localStorage.removeItem('lsl_order_draft');
                                     localStorage.removeItem('lsl_order_step');
                                     nextStep();
                                 } catch (e: any) {
                                     console.error("Submission failed", e);
-                                    alert(`Something went wrong: ${e.message || "Please check your connection and try again."}`);
-                                    // Keep them on the same page so they can retry
+                                    alert(`Something went wrong: ${e.message || "Please check your connection."}`);
                                 } finally {
                                     setIsGenerating(false);
                                 }
@@ -786,8 +838,15 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
                             >
                                 Schedule a Live Design Call
                             </button>
-                            <button onClick={() => window.location.reload()} className="w-full py-4 text-gray-500 font-bold hover:text-lsl-black transition-colors">
-                                Back to Home
+                            <button
+                                onClick={() => {
+                                    localStorage.removeItem('lsl_order_draft');
+                                    localStorage.removeItem('lsl_order_step');
+                                    window.location.reload();
+                                }}
+                                className="w-full py-4 text-gray-500 font-bold hover:text-lsl-black transition-colors"
+                            >
+                                Start New Order
                             </button>
                         </div>
 
@@ -868,3 +927,4 @@ export const OrderBuilder: React.FC<{ className?: string }> = ({ className }) =>
         </div>
     );
 };
+
