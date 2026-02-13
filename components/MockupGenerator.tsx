@@ -52,6 +52,14 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
         setShowEmailModal(false);
 
         try {
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            if (!apiKey) {
+                alert("Missing API Key in .env.local");
+                setIsGenerating(false);
+                return;
+            }
+
+            const ai = new GoogleGenAI({ apiKey });
             const base64Image = mockupPreview?.split(',')[1] || '';
             const mimeType = mockupImage?.type || 'image/png';
 
@@ -65,32 +73,42 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
         ADDITIONAL DETAILS: ${mockupPrompt}.
         ENVIRONMENT: Professional, minimalist studio with soft directional lighting.`;
 
-            // Call Portal API
-            const response = await fetch('http://localhost:3000/api/mockup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    prompt,
-                    imageBase64: base64Image,
-                    aspectRatio,
-                    mimeType
-                })
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.0-flash-exp',
+                contents: [
+                    {
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64Image
+                                }
+                            }
+                        ]
+                    }
+                ],
+                config: {
+                    // @ts-ignore
+                    imageConfig: {
+                        aspectRatio: aspectRatio
+                    }
+                }
             });
 
-            const data = await response.json();
-
-            if (data.success && data.image) {
-                setGeneratedMockup(data.image);
+            if (response.candidates && response.candidates[0].content.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        setGeneratedMockup(`data:image/png;base64,${part.inlineData.data}`);
+                        break;
+                    }
+                }
             } else {
-                console.error("Generation failed:", data.error);
-                alert("Failed to generate mockup. Please try again.");
+                throw new Error("No image generated");
             }
-
         } catch (error) {
             console.error("Error generating mockup:", error);
-            alert("Error connecting to generation service.");
+            alert("Error generating mockup. See console for details.");
         } finally {
             setIsGenerating(false);
         }
