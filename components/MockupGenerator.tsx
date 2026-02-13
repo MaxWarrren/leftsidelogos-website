@@ -13,8 +13,13 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
     const [mockupPreview, setMockupPreview] = useState<string | null>(null);
     const [generatedMockup, setGeneratedMockup] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+
+    // Changed to text inputs
     const [itemType, setItemType] = useState('T-Shirt');
     const [viewAngle, setViewAngle] = useState('Front View');
+    const [logoPlacement, setLogoPlacement] = useState('Center Chest');
+    const [color, setColor] = useState('White');
+
     const [aspectRatio, setAspectRatio] = useState<'1:1' | '3:4' | '4:3' | '9:16' | '16:9'>('1:1');
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [email, setEmail] = useState(localStorage.getItem('lsl_user_email') || '');
@@ -47,48 +52,45 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
         setShowEmailModal(false);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const base64Image = mockupPreview?.split(',')[1] || '';
+            const mimeType = mockupImage?.type || 'image/png';
 
             const prompt = `You are an elite product photography AI for "Left Side Logos". 
         TASK: Create a photorealistic, commercial-grade product mockup.
-        PRODUCT: ${itemType}.
+        PRODUCT: ${color} ${itemType}.
         ANGLE: ${viewAngle}.
+        LOGO PLACEMENT: ${logoPlacement}.
         LOGO: Naturally integrate the uploaded artwork onto the garment. Ensure the logo follows the fabric's curves, wrinkles, and lighting.
         MANDATORY STYLE: The rendered image MUST be large, centered, and take up the full frame. No excessive white space around the product.
         ADDITIONAL DETAILS: ${mockupPrompt}.
         ENVIRONMENT: Professional, minimalist studio with soft directional lighting.`;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: {
-                    parts: [
-                        { text: prompt },
-                        {
-                            inlineData: {
-                                mimeType: mockupImage.type,
-                                data: base64Image
-                            }
-                        }
-                    ]
+            // Call Portal API
+            const response = await fetch('http://localhost:3000/api/mockup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                 },
-                config: {
-                    imageConfig: {
-                        aspectRatio: aspectRatio
-                    }
-                }
+                body: JSON.stringify({
+                    prompt,
+                    imageBase64: base64Image,
+                    aspectRatio,
+                    mimeType
+                })
             });
 
-            if (response.candidates && response.candidates[0].content.parts) {
-                for (const part of response.candidates[0].content.parts) {
-                    if (part.inlineData) {
-                        setGeneratedMockup(`data:image/png;base64,${part.inlineData.data}`);
-                        break;
-                    }
-                }
+            const data = await response.json();
+
+            if (data.success && data.image) {
+                setGeneratedMockup(data.image);
+            } else {
+                console.error("Generation failed:", data.error);
+                alert("Failed to generate mockup. Please try again.");
             }
+
         } catch (error) {
             console.error("Error generating mockup:", error);
+            alert("Error connecting to generation service.");
         } finally {
             setIsGenerating(false);
         }
@@ -179,15 +181,46 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Apparel Type</label>
-                                    <select value={itemType} onChange={(e) => setItemType(e.target.value)} className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all">
-                                        <option>T-Shirt</option><option>Hoodie</option><option>Sweatshirt</option><option>Polo</option><option>Hat</option><option>Beanie</option><option>Tote Bag</option>
-                                    </select>
+                                    <input
+                                        type="text"
+                                        value={itemType}
+                                        onChange={(e) => setItemType(e.target.value)}
+                                        placeholder="e.g. T-Shirt, Hoodie"
+                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Camera Angle</label>
-                                    <select value={viewAngle} onChange={(e) => setViewAngle(e.target.value)} className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all">
-                                        <option>Front View</option><option>Back View</option><option>Model Wearing</option><option>Flat Lay</option><option>Close-up Detail</option>
-                                    </select>
+                                    <input
+                                        type="text"
+                                        value={viewAngle}
+                                        onChange={(e) => setViewAngle(e.target.value)}
+                                        placeholder="e.g. Front, Flat Lay"
+                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Colors</label>
+                                    <input
+                                        type="text"
+                                        value={color}
+                                        onChange={(e) => setColor(e.target.value)}
+                                        placeholder="e.g. White, Black, Navy"
+                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Logo Placement</label>
+                                    <input
+                                        type="text"
+                                        value={logoPlacement}
+                                        onChange={(e) => setLogoPlacement(e.target.value)}
+                                        placeholder="e.g. Center Chest, Left Pocket"
+                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
+                                    />
                                 </div>
                             </div>
 
