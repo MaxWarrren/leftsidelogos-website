@@ -83,7 +83,7 @@ function Hero({ onStartDesigning }: HeroProps) {
             transition={{ delay: 0.4 }}
             className="text-base md:text-lg text-gray-500 max-w-2xl font-sans font-normal mt-6"
           >
-            At Left Side Logos, we bring your brand to life with high-quality custom apparel.
+            At Left Side Logos, we BRING YOUR LOGO TO LIFE with high-quality custom apparel.
             From embroidery to full-color decals, we handle everything in-house for exceptional results.
           </motion.p>
 
