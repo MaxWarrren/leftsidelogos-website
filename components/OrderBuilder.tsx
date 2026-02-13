@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronRight, ChevronLeft, Upload, Loader2, Sparkles, X, Mail, Maximize2, Send, ShoppingBag, ArrowRight } from 'lucide-react';
 
 import { GoogleGenAI } from "@google/genai";
-import Cal, { getCalApi } from "@calcom/embed-react";
 import { cn } from '../lib/utils';
 
 // --- Types ---
@@ -65,7 +64,6 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
     const [step, setStep] = useState(1);
     const [direction, setDirection] = useState(0);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [showCalModal, setShowCalModal] = useState(false);
 
     const defaultDraft: OrderDraft = {
         useCase: null,
@@ -591,7 +589,7 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                                         `;
 
                                         const response = await ai.models.generateContent({
-                                            model: 'gemini-2.0-flash-lite-preview-02-05',
+                                            model: 'gemini-1.5-flash',
                                             contents: [
                                                 { parts: [{ text: prompt }] }
                                             ]
@@ -662,49 +660,16 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
 
                         <div className="grid gap-3 max-w-xs mx-auto">
                             <button
-                                onClick={() => setShowCalModal(true)}
-                                className="w-full py-4 bg-lsl-black text-white rounded-2xl font-bold hover:shadow-lg transition-all"
-                            >
-                                Schedule a Live Design Call
-                            </button>
-                            <button
                                 onClick={() => {
                                     localStorage.removeItem('lsl_order_draft');
                                     localStorage.removeItem('lsl_order_step');
                                     window.location.reload();
                                 }}
-                                className="w-full py-4 text-gray-500 font-bold hover:text-lsl-black transition-colors"
+                                className="w-full py-4 bg-lsl-black text-white rounded-2xl font-bold hover:shadow-lg transition-all"
                             >
                                 Start New Order
                             </button>
                         </div>
-
-                        {/* Cal Modal */}
-                        <AnimatePresence>
-                            {showCalModal && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    className="fixed inset-0 z-[100] bg-white/50 backdrop-blur-md flex items-center justify-center p-4 lg:p-10"
-                                >
-                                    <div className="bg-white w-full max-w-4xl h-[80vh] rounded-[2rem] shadow-2xl overflow-hidden relative border border-gray-200">
-                                        <button
-                                            onClick={() => setShowCalModal(false)}
-                                            className="absolute top-4 right-4 z-50 bg-white p-2 rounded-full shadow-md text-black"
-                                        >
-                                            <X size={20} />
-                                        </button>
-                                        <Cal
-                                            namespace="test-live"
-                                            calLink="brad-gunn-q42thj/test-live"
-                                            style={{ width: "100%", height: "100%", overflow: "scroll" }}
-                                            config={{ "layout": "month_view" }}
-                                        />
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
                     </div>
                 );
 

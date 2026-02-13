@@ -74,7 +74,7 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
         ENVIRONMENT: Professional, minimalist studio with soft directional lighting.`;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.0-flash-exp',
+                model: 'gemini-2.5-flash-image',
                 contents: [
                     {
                         parts: [
