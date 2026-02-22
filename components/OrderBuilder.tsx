@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ChevronRight, ChevronLeft, Upload, Loader2, Sparkles, X, Mail, Maximize2, Send, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Check, ChevronRight, ChevronLeft, Upload, Loader2, Sparkles, X, Mail, Maximize2, Send, ShoppingBag, ArrowRight, Calendar } from 'lucide-react';
 
 import { GoogleGenAI } from "@google/genai";
 import { cn } from '../lib/utils';
@@ -59,7 +59,7 @@ const COLORS = [
     { name: 'Safety Green', hex: '#E7F538' },
 ];
 
-export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: () => void }> = ({ className, onNavigateToMockup }) => {
+export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: () => void; onNavigateToContact?: () => void }> = ({ className, onNavigateToMockup, onNavigateToContact }) => {
     // State
     const [step, setStep] = useState(1);
     const [direction, setDirection] = useState(0);
@@ -668,6 +668,12 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                                 className="w-full py-4 bg-lsl-black text-white rounded-2xl font-bold hover:shadow-lg transition-all"
                             >
                                 Start New Order
+                            </button>
+                            <button
+                                onClick={onNavigateToContact}
+                                className="w-full py-4 bg-lsl-blue text-white rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                            >
+                                Schedule Live Design Call <Calendar size={18} />
                             </button>
                         </div>
                     </div>

@@ -7,8 +7,8 @@ import Cal, { getCalApi } from "@calcom/embed-react";
 export const ContactPage: React.FC = () => {
     useEffect(() => {
         (async function () {
-            const cal = await getCalApi({});
-            cal("ui", { "styles": { "branding": { "brandColor": "#000000" } }, "hideEventTypeDetails": false, "layout": "month_view" });
+            const cal = await getCalApi({ "namespace": "test-live" });
+            cal("ui", { "hideEventTypeDetails": false, "layout": "month_view" });
         })();
     }, []);
 
@@ -46,8 +46,9 @@ export const ContactPage: React.FC = () => {
                     className="w-full bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100 p-4"
                 >
                     <Cal
-                        calLink="leftsidelogos/30min"
-                        style={{ width: "100%", height: "100%", minHeight: "600px" }}
+                        namespace="test-live"
+                        calLink="brad-gunn-q42thj/test-live"
+                        style={{ width: "100%", height: "100%", minHeight: "600px", overflow: "scroll" }}
                         config={{ layout: 'month_view' }}
                     />
                 </motion.div>

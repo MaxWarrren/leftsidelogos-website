@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, ArrowRight, X } from 'lucide-react';
 import { OrderBuilder } from './OrderBuilder';
 
-export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void }> = ({ onNavigateToMockup }) => {
+export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void; onNavigateToContact?: () => void }> = ({ onNavigateToMockup, onNavigateToContact }) => {
     const [isOrderOpen, setIsOrderOpen] = useState(true);
 
     return (
@@ -96,7 +96,11 @@ export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void }> = ({ 
                                     </div>
 
                                     <div className="p-2">
-                                        <OrderBuilder className="!min-h-0 !pt-8 !pb-20 !bg-transparent" onNavigateToMockup={onNavigateToMockup} />
+                                        <OrderBuilder
+                                            className="!min-h-0 !pt-8 !pb-20 !bg-transparent"
+                                            onNavigateToMockup={onNavigateToMockup}
+                                            onNavigateToContact={onNavigateToContact}
+                                        />
                                     </div>
                                 </div>
                             </motion.div>
