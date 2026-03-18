@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronRight, ChevronLeft, Upload, Loader2, Sparkles, X, Mail, Maximize2, Send, ShoppingBag, ArrowRight, Calendar } from 'lucide-react';
 
-import { GoogleGenAI } from "@google/genai";
+
 import { cn } from '../lib/utils';
 
 // --- Types ---
@@ -554,78 +554,59 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                             onClick={async () => {
                                 setIsGenerating(true);
                                 try {
-                                    const formData = new FormData();
-                                    formData.append('name', orderDraft.contact.name);
-                                    formData.append('email', orderDraft.contact.email);
-                                    formData.append('company', orderDraft.contact.company);
-
-                                    // Serialize details excluding big files
-                                    const detailsToSave = { ...orderDraft, logoFiles: undefined, logoPreviewUrls: undefined, mockupImageUrl: undefined };
-                                    formData.append('details', JSON.stringify(detailsToSave));
-
-                                    // Generate AI Summary
-                                    let summary = `${orderDraft.useCase} order. ${orderDraft.quantityRange} items.`;
-
-                                    try {
-                                        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
-
-                                        const prompt = `You are a professional sales assistant for a custom apparel company. 
-                                        Write a detailed but concise paragraph summarizing this lead for our CRM.
-                                        Include the Use Case, Quantity, Timeline, Specific Products, Brands, Colors, and Decoration methods.
-                                        
-                                        Input Data: ${JSON.stringify({
+                                    // Build clean JSON payload for n8n
+                                    const payload = {
+                                        contact: {
+                                            name: orderDraft.contact.name,
+                                            email: orderDraft.contact.email,
+                                            company: orderDraft.contact.company,
+                                        },
+                                        order: {
                                             useCase: orderDraft.useCase,
-                                            quantity: orderDraft.quantityRange,
+                                            serviceInterests: orderDraft.serviceInterests,
+                                            quantityRange: orderDraft.quantityRange,
                                             timeline: orderDraft.timeline,
-                                            items: orderDraft.selectedItemTypes,
-                                            customItem: orderDraft.customItemType,
-                                            brands: orderDraft.selectedBrands,
-                                            colors: orderDraft.selectedColors,
-                                            customColor: orderDraft.customColor,
-                                            decoration: orderDraft.selectedDecorationTypes,
-                                            placement: orderDraft.logoPlacement,
-                                            mockupPrompt: orderDraft.mockupPrompt
-                                        })}
-                                        `;
+                                            itemTypes: [
+                                                ...orderDraft.selectedItemTypes,
+                                                ...(orderDraft.customItemType ? [orderDraft.customItemType] : []),
+                                            ],
+                                            brands: [
+                                                ...orderDraft.selectedBrands,
+                                                ...(orderDraft.customBrand ? [orderDraft.customBrand] : []),
+                                            ],
+                                            colors: orderDraft.customColor,
+                                            decorationTypes: orderDraft.selectedDecorationTypes,
+                                            logoPlacement: orderDraft.logoPlacement || null,
+                                        },
+                                        meta: {
+                                            submittedAt: new Date().toISOString(),
+                                            source: 'website_order_builder',
+                                            hasLogoFiles: orderDraft.logoFiles.length > 0,
+                                            hasMockup: !!orderDraft.mockupImageUrl,
+                                        },
+                                    };
 
-                                        const response = await ai.models.generateContent({
-                                            model: 'gemini-1.5-flash',
-                                            contents: [
-                                                { parts: [{ text: prompt }] }
-                                            ]
+                                    const WEBHOOK_ID = '76e4d8b0-e9eb-4dad-85e7-115c1d453a99';
+                                    const WEBHOOK_BASE = 'https://n8n.maxwellwarren.dev';
+                                    const PRODUCTION_URL = `${WEBHOOK_BASE}/webhook/${WEBHOOK_ID}`;
+                                    const TEST_URL = `${WEBHOOK_BASE}/webhook-test/${WEBHOOK_ID}`;
+
+                                    const sendToWebhook = async (url: string) => {
+                                        const res = await fetch(url, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(payload),
                                         });
+                                        if (!res.ok) throw new Error(`Webhook responded with ${res.status}`);
+                                        return res;
+                                    };
 
-                                        if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) {
-                                            summary = response.candidates[0].content.parts[0].text;
-                                        }
-                                    } catch (e) {
-                                        console.warn("AI Summary failed, using fallback", e);
-                                    }
-
-                                    formData.append('summary', summary);
-
-                                    // Append Logo Files
-                                    orderDraft.logoFiles.forEach(file => {
-                                        formData.append('files', file);
-                                    });
-
-                                    // Append Mockup if it exists
-                                    if (orderDraft.mockupImageUrl) {
-                                        const res = await fetch(orderDraft.mockupImageUrl);
-                                        const blob = await res.blob();
-                                        formData.append('files', blob, 'mockup_generated.png');
-                                        formData.append('generatedMockup', 'true');
-                                    }
-
-                                    const PORTAL_API_URL = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3000/api/leads';
-
-                                    const response = await fetch(PORTAL_API_URL, {
-                                        method: 'POST',
-                                        body: formData
-                                    });
-
-                                    if (!response.ok) {
-                                        throw new Error(`Server responded with ${response.status}`);
+                                    // Try production webhook first, fall back to test webhook
+                                    try {
+                                        await sendToWebhook(PRODUCTION_URL);
+                                    } catch (prodError) {
+                                        console.warn('Production webhook failed, trying test webhook...', prodError);
+                                        await sendToWebhook(TEST_URL);
                                     }
 
                                     // Clear storage
@@ -633,8 +614,8 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                                     localStorage.removeItem('lsl_order_step');
                                     nextStep();
                                 } catch (e: any) {
-                                    console.error("Submission failed", e);
-                                    alert(`Something went wrong: ${e.message || "Please check your connection."}`);
+                                    console.error('Submission failed', e);
+                                    alert(`Something went wrong: ${e.message || 'Please check your connection.'}`);
                                 } finally {
                                     setIsGenerating(false);
                                 }
