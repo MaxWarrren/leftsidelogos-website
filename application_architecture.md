@@ -97,7 +97,8 @@ This app uses **client-side state-based routing** (no React Router). The `App.ts
 ### 3. Order Builder (`OrderBuilder.tsx`)
 - Largest component (~41KB) — full interactive order form
 - Multi-step wizard: use case → services → quantity → timeline → products → colors → decoration → price estimate → logo upload → contact info
-- **Submits leads via n8n webhook** (JSON POST, not multipart FormData)
+- **On submit:** uploads logo files and any generated mockup directly to Supabase Storage (`leads-attachments` bucket) via the Storage REST API using the anon key (no new dependencies)
+- **Submits leads via n8n webhook** (JSON POST) with Supabase Storage URLs included in `meta.fileUrls`
 - Automatic fallback: tries production webhook URL first, retries test webhook URL on failure
 - AI summary generation removed — raw structured data sent to n8n for processing
 
@@ -152,6 +153,6 @@ This app uses **client-side state-based routing** (no React Router). The `App.ts
 
 The Website and Portal are **separate applications** but serve the same business (Left Side Logos). Key integration points:
 
-1. **Lead Generation → n8n → Portal CRM:** The Website's order builder submits structured JSON to an **n8n webhook**, which processes the data and forwards it to the Portal's `/api/leads/create` endpoint (authenticated via `x-api-key`). This gives n8n full control over validation, enrichment, and automation before data reaches the database.
+1. **Lead Generation → n8n → Portal CRM:** The Website's order builder uploads any logo/mockup files directly to Supabase Storage (`leads-attachments` bucket) using the anon key, then submits structured JSON (including the file URLs) to an **n8n webhook**. n8n forwards the data to the Portal's `/api/leads/create` endpoint (authenticated via `x-api-key`), passing the file URLs as `file_paths` to be stored on the lead record.
 2. **Shared Branding:** Both apps use the Left Side Logos brand identity (logo, color palette, typography).
 3. **User Journey:** Website visitors → submit orders/quotes → n8n webhook → Portal CRM → Admin converts leads to clients → Clients access Portal dashboard.
