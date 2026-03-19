@@ -554,7 +554,59 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                             onClick={async () => {
                                 setIsGenerating(true);
                                 try {
-                                    // Build clean JSON payload for n8n
+                                    // --- Upload files to Supabase Storage ---
+                                    const SUPABASE_URL = 'https://fijepyoxxfjjyynuwdmr.supabase.co';
+                                    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpamVweW94eGZqanl5bnV3ZG1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyMTIyMzgsImV4cCI6MjA4NDc4ODIzOH0.o5X3y3GXDana12791HpvyBAMlnta1Gil9TodMPErWiY';
+                                    const STORAGE_BUCKET = 'leads-attachments';
+
+                                    const uploadFile = async (file: File | Blob, fileName: string): Promise<string | null> => {
+                                        const safeName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+                                        try {
+                                            const res = await fetch(
+                                                `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${safeName}`,
+                                                {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                                                        'apikey': SUPABASE_ANON_KEY,
+                                                    },
+                                                    body: file,
+                                                }
+                                            );
+                                            if (!res.ok) {
+                                                console.error('Upload failed:', await res.text());
+                                                return null;
+                                            }
+                                            // Return the public URL
+                                            return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${safeName}`;
+                                        } catch (err) {
+                                            console.error('Upload error:', err);
+                                            return null;
+                                        }
+                                    };
+
+                                    // Upload logo files
+                                    const fileUrls: string[] = [];
+                                    for (const file of orderDraft.logoFiles) {
+                                        if (file && file.size > 0) {
+                                            const url = await uploadFile(file, file.name);
+                                            if (url) fileUrls.push(url);
+                                        }
+                                    }
+
+                                    // Upload mockup if it exists
+                                    if (orderDraft.mockupImageUrl) {
+                                        try {
+                                            const mockupRes = await fetch(orderDraft.mockupImageUrl);
+                                            const blob = await mockupRes.blob();
+                                            const url = await uploadFile(blob, 'mockup_generated.png');
+                                            if (url) fileUrls.push(url);
+                                        } catch (err) {
+                                            console.warn('Mockup upload failed:', err);
+                                        }
+                                    }
+
+                                    // --- Build clean JSON payload for n8n ---
                                     const payload = {
                                         contact: {
                                             name: orderDraft.contact.name,
@@ -581,8 +633,7 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                                         meta: {
                                             submittedAt: new Date().toISOString(),
                                             source: 'website_order_builder',
-                                            hasLogoFiles: orderDraft.logoFiles.length > 0,
-                                            hasMockup: !!orderDraft.mockupImageUrl,
+                                            fileUrls,
                                         },
                                     };
 
