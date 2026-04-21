@@ -8,9 +8,11 @@ import { Footer } from './components/Footer';
 import { MockupGenerator } from './components/MockupGenerator';
 import { ContactPage } from './components/ContactPage';
 import { BuildOrderPage } from './components/BuildOrderPage';
+import { CatalogPage } from './components/CatalogPage';
 import { BottomCTA } from './components/BottomCTA';
+import { CartProvider } from './components/CartContext';
 
-type Page = 'home' | 'mockup' | 'contact' | 'build-order';
+type Page = 'home' | 'mockup' | 'contact' | 'build-order' | 'catalog';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
@@ -21,37 +23,45 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f4f5] font-sans text-lsl-black selection:bg-lsl-blue selection:text-white flex flex-col">
-      <Navbar
-        currentPage={currentPage}
-        setCurrentPage={navigateTo}
-      />
+    <CartProvider>
+      <div className="min-h-screen bg-[#f4f4f5] font-sans text-lsl-black selection:bg-lsl-blue selection:text-white flex flex-col">
+        <Navbar
+          currentPage={currentPage}
+          setCurrentPage={navigateTo}
+        />
 
-      <main className="flex-grow">
-        {currentPage === 'home' && (
-          <>
-            <Hero onStartDesigning={() => navigateTo('build-order')} />
-            <About />
-            <Services />
-            <BottomCTA onStartDesigning={() => navigateTo('build-order')} />
-          </>
-        )}
+        <main className="flex-grow">
+          {currentPage === 'home' && (
+            <>
+              <Hero onStartDesigning={() => navigateTo('build-order')} />
+              <About />
+              <Services />
+              <BottomCTA onStartDesigning={() => navigateTo('build-order')} />
+            </>
+          )}
 
-        {currentPage === 'mockup' && (
-          <MockupGenerator onSwitchToQuote={() => navigateTo('build-order')} />
-        )}
-        {currentPage === 'build-order' && (
-          <BuildOrderPage
-            onNavigateToMockup={() => navigateTo('mockup')}
-            onNavigateToContact={() => navigateTo('contact')}
-          />
-        )}
-        {currentPage === 'contact' && (
-          <ContactPage />
-        )}
-      </main>
-      <Footer />
-    </div>
+          {currentPage === 'mockup' && (
+            <MockupGenerator onSwitchToQuote={() => navigateTo('build-order')} />
+          )}
+          {currentPage === 'build-order' && (
+            <BuildOrderPage
+              onNavigateToMockup={() => navigateTo('mockup')}
+              onNavigateToContact={() => navigateTo('contact')}
+              onNavigateToCatalog={() => navigateTo('catalog')}
+            />
+          )}
+          {currentPage === 'contact' && (
+            <ContactPage />
+          )}
+          {currentPage === 'catalog' && (
+            <CatalogPage
+              onNavigateToCart={() => navigateTo('build-order')}
+            />
+          )}
+        </main>
+        <Footer />
+      </div>
+    </CartProvider>
   );
 }
 

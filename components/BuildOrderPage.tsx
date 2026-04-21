@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, ArrowRight, X } from 'lucide-react';
 import { OrderBuilder } from './OrderBuilder';
 
-export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void; onNavigateToContact?: () => void }> = ({ onNavigateToMockup, onNavigateToContact }) => {
+export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void; onNavigateToContact?: () => void; onNavigateToCatalog?: () => void }> = ({ onNavigateToMockup, onNavigateToContact, onNavigateToCatalog }) => {
     const [isOrderOpen, setIsOrderOpen] = useState(true);
 
     return (
@@ -100,6 +100,7 @@ export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void; onNavig
                                             className="!min-h-0 !pt-8 !pb-20 !bg-transparent"
                                             onNavigateToMockup={onNavigateToMockup}
                                             onNavigateToContact={onNavigateToContact}
+                                            onNavigateToCatalog={onNavigateToCatalog}
                                         />
                                     </div>
                                 </div>

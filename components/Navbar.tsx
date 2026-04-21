@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { motion, useScroll, useMotionValueEvent } from 'framer-motion';
-import { Menu, X } from 'lucide-react';
+import { motion, useScroll, useMotionValueEvent, AnimatePresence } from 'framer-motion';
+import { Menu, X, ShoppingBag } from 'lucide-react';
+import { useCart } from './CartContext';
 
 interface NavbarProps {
-  currentPage: 'home' | 'mockup' | 'contact' | 'build-order';
-  setCurrentPage: (page: 'home' | 'mockup' | 'contact' | 'build-order') => void;
+  currentPage: 'home' | 'mockup' | 'contact' | 'build-order' | 'catalog';
+  setCurrentPage: (page: 'home' | 'mockup' | 'contact' | 'build-order' | 'catalog') => void;
 }
 
 const navItems = [
-  { name: 'Home', href: '#home', page: 'home' },
-  { name: 'About', href: '#about', page: 'home' },
+  { name: 'Catalog', href: '#', page: 'catalog' },
   { name: 'Mockup Studio', href: '#', page: 'mockup' },
   { name: 'Build Order', href: '#', page: 'build-order' },
   { name: 'Contact', href: '#', page: 'contact' },
@@ -20,6 +20,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
   const [hidden, setHidden] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { getCartCount } = useCart();
+  const cartCount = getCartCount();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = scrollY.getPrevious() || 0;
@@ -100,15 +102,52 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
                 {item.name}
               </a>
             ))}
+
+            {/* Cart Icon */}
+            <button
+              onClick={() => { setCurrentPage('build-order'); window.scrollTo(0, 0); }}
+              className={`relative p-2 rounded-full transition-all hover:bg-white/10 ${scrolled ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-lsl-blue'}`}
+              aria-label="View Cart"
+              id="navbar-cart-btn"
+            >
+              <ShoppingBag size={20} />
+              <AnimatePresence>
+                {cartCount > 0 && (
+                  <motion.span
+                    key={cartCount}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-lsl-blue text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1"
+                  >
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
           </div>
 
-          {/* Mobile Menu Toggle */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-1"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          {/* Mobile: Cart + Menu Toggle */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              onClick={() => { setCurrentPage('build-order'); window.scrollTo(0, 0); }}
+              className="relative p-2"
+              aria-label="View Cart"
+            >
+              <ShoppingBag size={22} />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-lsl-blue text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-1"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </div>
       </motion.nav>
 
