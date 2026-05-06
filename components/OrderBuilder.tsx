@@ -1,8 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, Upload, Loader2, Sparkles, X, Calendar, ShoppingBag, ChevronDown, ChevronUp, Minus, Plus, Trash2, Tag } from 'lucide-react';
+import { Check, Upload, Loader2, Sparkles, X, Calendar, ShoppingBag, ChevronDown, ChevronUp, Minus, Plus, Trash2, Tag, LogIn } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCart } from './CartContext';
+import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
+import { MediaPicker, type MediaItem } from './MediaPicker';
 import type { GroupedCartItem } from '../types';
 
 // --- Types ---
@@ -19,8 +22,7 @@ interface OrderDraft {
     selectedDecorationTypes: DecorationType[];
     logoPlacement: string;
     wantsMockup: boolean | null;
-    logoFiles: File[];
-    logoPreviewUrls: string[];
+    logoMedia: MediaItem[];
     mockupImageUrl: string | null;
     mockupPrompt: string;
     viewAngle: string;
@@ -95,11 +97,18 @@ const CartItemCard: React.FC<{
                 className="w-full flex items-center gap-4 p-4 text-left"
             >
                 {/* Thumbnail */}
-                <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
-                    {group.image ? (
+                <div className="relative w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden bg-white">
+                    {group.mockupUrl ? (
+                        <img src={group.mockupUrl} alt={group.productName} className="w-full h-full object-cover" />
+                    ) : group.image ? (
                         <img src={group.image} alt={group.productName} className="w-full h-full object-contain p-1.5" />
                     ) : (
                         <ShoppingBag className="w-6 h-6 text-gray-300" />
+                    )}
+                    {group.mockupUrl && (
+                        <div className="absolute top-0 right-0 bg-white/80 backdrop-blur-sm rounded-bl-lg p-0.5">
+                            <Sparkles className="w-3 h-3 text-lsl-blue" />
+                        </div>
                     )}
                 </div>
 
@@ -178,6 +187,7 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const { items: cartItems, getGroupedItems, getCartTotal, getCartCount, updateQuantity, removeFromCart, clearCart } = useCart();
+    const { isAuthenticated, user, profile, organization, openAuthModal } = useAuth();
 
     const groupedItems = getGroupedItems();
     const cartTotal = getCartTotal();
@@ -190,8 +200,7 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
         selectedDecorationTypes: [],
         logoPlacement: '',
         wantsMockup: null,
-        logoFiles: [],
-        logoPreviewUrls: [],
+        logoMedia: [],
         mockupImageUrl: null,
         mockupPrompt: '',
         viewAngle: 'Front View',
@@ -200,7 +209,7 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
     };
 
     const [orderDraft, setOrderDraft] = useState<OrderDraft>(defaultDraft);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
 
     // Persist draft to localStorage (excluding non-serializable fields)
     useEffect(() => {
@@ -208,13 +217,13 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                setOrderDraft({ ...defaultDraft, ...parsed, logoFiles: [], logoPreviewUrls: [], mockupImageUrl: null });
+                setOrderDraft({ ...defaultDraft, ...parsed, logoMedia: [], mockupImageUrl: null });
             } catch (e) { console.error(e); }
         }
     }, []);
 
     useEffect(() => {
-        const toSave = { ...orderDraft, logoFiles: [], logoPreviewUrls: [], mockupImageUrl: null };
+        const toSave = { ...orderDraft, logoMedia: [], mockupImageUrl: null };
         localStorage.setItem('lsl_order_draft', JSON.stringify(toSave));
     }, [orderDraft]);
 
@@ -231,64 +240,35 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
         }
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const newFiles = Array.from(e.target.files).slice(0, 3 - orderDraft.logoFiles.length);
-            const newUrls = newFiles.map(file => URL.createObjectURL(file));
-            updateDraft({
-                logoFiles: [...orderDraft.logoFiles, ...newFiles],
-                logoPreviewUrls: [...orderDraft.logoPreviewUrls, ...newUrls],
-            });
-        }
+    const handleMediaSelect = (items: MediaItem[]) => {
+        // limit to 3 total
+        const remainingSlots = 3 - orderDraft.logoMedia.length;
+        if (remainingSlots <= 0) return;
+        const newItems = items.slice(0, remainingSlots);
+        updateDraft({ logoMedia: [...orderDraft.logoMedia, ...newItems] });
     };
 
     const removeFile = (index: number) => {
-        const newFiles = [...orderDraft.logoFiles];
-        const newUrls = [...orderDraft.logoPreviewUrls];
-        newFiles.splice(index, 1);
-        newUrls.splice(index, 1);
-        updateDraft({ logoFiles: newFiles, logoPreviewUrls: newUrls });
+        const newMedia = [...orderDraft.logoMedia];
+        newMedia.splice(index, 1);
+        updateDraft({ logoMedia: newMedia });
     };
 
     const handleSubmit = async () => {
+        if (!isAuthenticated || !organization) {
+            openAuthModal();
+            return;
+        }
+
         setIsGenerating(true);
         try {
-            const SUPABASE_URL = 'https://fijepyoxxfjjyynuwdmr.supabase.co';
-            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpamVweW94eGZqanl5bnV3ZG1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyMTIyMzgsImV4cCI6MjA4NDc4ODIzOH0.o5X3y3GXDana12791HpvyBAMlnta1Gil9TodMPErWiY';
-            const STORAGE_BUCKET = 'leads-attachments';
-
-            const uploadFile = async (file: File | Blob, fileName: string): Promise<string | null> => {
-                const safeName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-                try {
-                    const res = await fetch(
-                        `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${safeName}`,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                                'apikey': SUPABASE_ANON_KEY,
-                            },
-                            body: file,
-                        }
-                    );
-                    if (!res.ok) {
-                        console.error('Upload failed:', await res.text());
-                        return null;
-                    }
-                    return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${safeName}`;
-                } catch (err) {
-                    console.error('Upload error:', err);
-                    return null;
-                }
-            };
-
-            // Upload logo files
+            // Include selected media item URLs
             const fileUrls: string[] = [];
-            for (const file of orderDraft.logoFiles) {
-                if (file && file.size > 0) {
-                    const url = await uploadFile(file, file.name);
-                    if (url) fileUrls.push(url);
-                }
+            for (const media of orderDraft.logoMedia) {
+                const { data: urlData } = supabase.storage
+                    .from('organization-assets')
+                    .getPublicUrl(media.file_path);
+                fileUrls.push(urlData.publicUrl);
             }
 
             // Upload mockup if present
@@ -296,14 +276,25 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                 try {
                     const mockupRes = await fetch(orderDraft.mockupImageUrl);
                     const blob = await mockupRes.blob();
-                    const url = await uploadFile(blob, 'mockup_generated.png');
-                    if (url) fileUrls.push(url);
+                    const safeName = `${Date.now()}-mockup.png`;
+                    const filePath = `order-attachments/${organization.id}/${safeName}`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('leads-attachments')
+                        .upload(filePath, blob);
+
+                    if (!uploadError) {
+                        const { data: urlData } = supabase.storage
+                            .from('leads-attachments')
+                            .getPublicUrl(filePath);
+                        fileUrls.push(urlData.publicUrl);
+                    }
                 } catch (err) {
                     console.warn('Mockup upload failed:', err);
                 }
             }
 
-            // Build cart breakdown for webhook
+            // Build cart breakdown for order details
             const cartBreakdown = groupedItems.map(g => ({
                 product: g.productName,
                 sku: g.sku,
@@ -318,49 +309,32 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                 })),
             }));
 
-            const payload = {
-                contact: {
-                    name: orderDraft.contact.name,
-                    email: orderDraft.contact.email,
-                    company: orderDraft.contact.company,
-                },
-                order: {
-                    useCase: orderDraft.useCase,
-                    serviceInterests: orderDraft.serviceInterests,
-                    timeline: orderDraft.timeline,
-                    decorationTypes: orderDraft.selectedDecorationTypes,
-                    logoPlacement: orderDraft.logoPlacement || null,
-                    items: cartBreakdown,
-                    totalItems: cartCount,
-                    totalEstimate: cartTotal,
-                },
-                meta: {
-                    submittedAt: new Date().toISOString(),
-                    source: 'website_order_builder',
-                    fileUrls,
-                },
-            };
+            // Generate order name
+            const orderName = `${organization.name} - Website Order`;
 
-            const WEBHOOK_ID = '76e4d8b0-e9eb-4dad-85e7-115c1d453a99';
-            const WEBHOOK_BASE = 'https://n8n.maxwellwarren.dev';
-            const PRODUCTION_URL = `${WEBHOOK_BASE}/webhook/${WEBHOOK_ID}`;
-            const TEST_URL = `${WEBHOOK_BASE}/webhook-test/${WEBHOOK_ID}`;
+            // Build description from preferences
+            const descParts = [];
+            if (orderDraft.useCase) descParts.push(`Use case: ${orderDraft.useCase}`);
+            if (orderDraft.serviceInterests.length) descParts.push(`Services: ${orderDraft.serviceInterests.join(', ')}`);
+            if (orderDraft.timeline) descParts.push(`Timeline: ${orderDraft.timeline}`);
+            if (orderDraft.selectedDecorationTypes.length) descParts.push(`Decoration: ${orderDraft.selectedDecorationTypes.join(', ')}`);
+            if (orderDraft.logoPlacement) descParts.push(`Placement: ${orderDraft.logoPlacement}`);
 
-            const sendToWebhook = async (url: string) => {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                if (!res.ok) throw new Error(`Webhook responded with ${res.status}`);
-                return res;
-            };
+            const { error } = await supabase.from('orders').insert({
+                organization_id: organization.id,
+                name: orderName,
+                status: 'pending',
+                timeline_step: 1,
+                price: cartTotal,
+                details: cartBreakdown,
+                description: descParts.join('\n'),
+                source: 'website',
+                submitted_by: user?.id,
+                attachments: fileUrls,
+            });
 
-            try {
-                await sendToWebhook(PRODUCTION_URL);
-            } catch (prodError) {
-                console.warn('Production webhook failed, trying test webhook...', prodError);
-                await sendToWebhook(TEST_URL);
+            if (error) {
+                throw new Error(error.message);
             }
 
             localStorage.removeItem('lsl_order_draft');
@@ -412,6 +386,7 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
 
     // --- Form ---
     return (
+        <>
         <div className={cn("min-h-screen bg-white pt-24 pb-20 px-4 md:px-8", className)}>
             <div className="max-w-2xl mx-auto space-y-16">
 
@@ -551,28 +526,27 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                     <div className="space-y-4">
                         <p className="text-sm text-gray-500">Upload up to 3 logo files. PNG or SVG preferred.</p>
                         <div className="grid grid-cols-3 gap-4">
-                            {orderDraft.logoPreviewUrls.map((url, i) => (
-                                <div key={i} className="relative aspect-square bg-white rounded-xl border border-gray-200 p-2 flex items-center justify-center">
-                                    <img src={url} className="w-full h-full object-contain" alt={`Logo ${i + 1}`} />
+                            {orderDraft.logoMedia.map((media, i) => (
+                                <div key={i} className="relative aspect-square bg-white rounded-xl border border-gray-200 p-2 flex items-center justify-center overflow-hidden">
+                                    <StoragePreviewImage path={media.file_path} alt={media.file_name} />
                                     <button
                                         onClick={() => removeFile(i)}
-                                        className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1 hover:bg-red-200"
+                                        className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1 hover:bg-red-200 z-10"
                                     >
                                         <X size={12} />
                                     </button>
                                 </div>
                             ))}
-                            {orderDraft.logoFiles.length < 3 && (
+                            {orderDraft.logoMedia.length < 3 && (
                                 <button
-                                    onClick={() => fileInputRef.current?.click()}
+                                    onClick={() => setIsMediaPickerOpen(true)}
                                     className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-lsl-blue hover:text-lsl-blue hover:bg-blue-50/10 transition-all"
                                 >
                                     <Upload size={22} />
-                                    <span className="text-xs font-bold mt-2">Add Logo</span>
+                                    <span className="text-xs font-bold mt-2">Add Media</span>
                                 </button>
                             )}
                         </div>
-                        <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
 
                         <div className="bg-blue-50/50 rounded-2xl p-5 flex items-start gap-3 border border-blue-100">
                             <Sparkles size={18} className="text-lsl-blue shrink-0 mt-0.5" />
@@ -590,43 +564,80 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                     </div>
                 </Section>
 
-                {/* 04 — Contact Info */}
-                <Section number="04" title="Your Info">
-                    <div className="space-y-3">
-                        <input
-                            type="email"
-                            placeholder="Email (required)"
-                            value={orderDraft.contact.email}
-                            onChange={e => updateDraft({ contact: { ...orderDraft.contact, email: e.target.value } })}
-                            className="w-full p-4 rounded-2xl border-2 border-gray-200 focus:border-lsl-blue outline-none font-medium"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Name (optional)"
-                            value={orderDraft.contact.name}
-                            onChange={e => updateDraft({ contact: { ...orderDraft.contact, name: e.target.value } })}
-                            className="w-full p-4 rounded-2xl border-2 border-gray-200 focus:border-lsl-blue outline-none font-medium"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Company (optional)"
-                            value={orderDraft.contact.company}
-                            onChange={e => updateDraft({ contact: { ...orderDraft.contact, company: e.target.value } })}
-                            className="w-full p-4 rounded-2xl border-2 border-gray-200 focus:border-lsl-blue outline-none font-medium"
-                        />
-                    </div>
+                {/* 04 — Account Info */}
+                <Section number="04" title="Your Account">
+                    {isAuthenticated && profile ? (
+                        <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-lsl-blue flex items-center justify-center">
+                                    <span className="text-white font-bold text-sm">{profile.full_name?.charAt(0) || '?'}</span>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-gray-900">{profile.full_name}</p>
+                                    <p className="text-sm text-gray-400">{profile.email}</p>
+                                </div>
+                            </div>
+                            {organization && (
+                                <p className="text-sm text-gray-500 pl-[52px]">Org: <span className="font-semibold">{organization.name}</span></p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 space-y-4">
+                            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
+                                <LogIn className="w-8 h-8 text-lsl-blue" />
+                            </div>
+                            <div>
+                                <h3 className="font-display font-bold text-gray-700 text-lg">Log in to submit your order</h3>
+                                <p className="text-sm text-gray-400 mt-1">Create a free account to track orders and manage your projects.</p>
+                            </div>
+                            <button
+                                onClick={openAuthModal}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-lsl-blue text-white rounded-full font-bold text-sm hover:bg-lsl-black transition-all"
+                            >
+                                <LogIn size={16} />
+                                Log In / Sign Up
+                            </button>
+                        </div>
+                    )}
                 </Section>
 
                 {/* Submit */}
                 <button
-                    disabled={!isValidEmail || isGenerating}
+                    disabled={!isAuthenticated || !organization || isGenerating}
                     onClick={handleSubmit}
                     className="w-full py-5 bg-lsl-blue text-white rounded-2xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
                 >
-                    {isGenerating ? <Loader2 className="animate-spin" size={20} /> : 'Submit Request'}
+                    {isGenerating ? <Loader2 className="animate-spin" size={20} /> : !isAuthenticated ? 'Log in to Submit' : 'Submit Order'}
                 </button>
 
             </div>
         </div>
+        
+        <MediaPicker
+            isOpen={isMediaPickerOpen}
+            onClose={() => setIsMediaPickerOpen(false)}
+            onSelect={handleMediaSelect}
+            multiple={true}
+            defaultCategory="Brand Assets"
+            title="Select Media"
+        />
+        </>
     );
 };
+
+// Helper component
+function StoragePreviewImage({ path, alt }: { path: string, alt?: string }) {
+    const [url, setUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        const getUrl = async () => {
+            const { data } = await supabase.storage.from('organization-assets').createSignedUrl(path, 3600);
+            if (data?.signedUrl) setUrl(data.signedUrl);
+        };
+        getUrl();
+    }, [path]);
+
+    if (!url) return <div className="h-full w-full flex items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-300" /></div>;
+
+    return <img src={url} className="w-full h-full object-contain" alt={alt || "Preview"} />;
+}

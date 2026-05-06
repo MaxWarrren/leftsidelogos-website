@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare } from 'lucide-react';
 import Cal, { getCalApi } from "@calcom/embed-react";
+import { PageHero } from './PageHero';
 
 export const ContactPage: React.FC = () => {
     useEffect(() => {
@@ -13,13 +14,9 @@ export const ContactPage: React.FC = () => {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#fcfcfd] relative overflow-hidden flex flex-col items-center pt-32 pb-20">
-            {/* Airy Background Decoration */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.03]">
-                <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-            </div>
-
-            <div className="container mx-auto px-4 relative z-10 max-w-4xl w-full">
+        <>
+        <PageHero className="pt-32 pb-20">
+            <div className="container mx-auto px-4 max-w-4xl w-full">
                 {/* Header Section */}
                 <motion.header
                     initial={{ opacity: 0, y: 20 }}
@@ -27,17 +24,22 @@ export const ContactPage: React.FC = () => {
                     transition={{ duration: 0.6 }}
                     className="text-center mb-12 space-y-4"
                 >
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-lsl-blue text-[10px] font-bold uppercase tracking-widest border border-blue-100">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-widest border border-white/20">
                         <MessageSquare size={12} />
                         Get in Touch
                     </div>
-                    <h1 className="text-5xl md:text-6xl font-display font-bold text-lsl-black tracking-tight">
+                    <h1 className="text-5xl md:text-6xl font-display font-bold text-white tracking-tight">
                         Schedule a Call
                     </h1>
-                    <p className="text-gray-400 max-w-xl mx-auto font-sans font-light text-lg">
+                    <p className="text-gray-300 max-w-xl mx-auto font-light text-lg">
                         Book a time with our design team to discuss your project.
                     </p>
                 </motion.header>
+            </div>
+        </PageHero>
+
+        <div className="bg-[#f4f4f5] py-12">
+            <div className="container mx-auto px-4 max-w-4xl w-full">
 
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -54,5 +56,6 @@ export const ContactPage: React.FC = () => {
                 </motion.div>
             </div>
         </div>
+        </>
     );
 };

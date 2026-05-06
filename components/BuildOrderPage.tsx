@@ -3,45 +3,47 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, ArrowRight, X } from 'lucide-react';
 import { OrderBuilder } from './OrderBuilder';
+import { PageHero } from './PageHero';
 
 export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void; onNavigateToContact?: () => void; onNavigateToCatalog?: () => void }> = ({ onNavigateToMockup, onNavigateToContact, onNavigateToCatalog }) => {
     const [isOrderOpen, setIsOrderOpen] = useState(true);
 
     return (
-        <div className={`min-h-screen bg-[#fcfcfd] relative overflow-hidden flex flex-col items-center pt-32 pb-20 transition-all duration-700 ${isOrderOpen ? 'justify-start' : 'justify-center'}`}>
-            {/* Airy Background Decoration */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.03]">
-                <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-            </div>
-
-            <div className="container mx-auto px-4 relative z-10 max-w-4xl w-full">
+        <>
+        <PageHero className="pt-32 pb-16">
+            <div className="container mx-auto px-4 max-w-4xl w-full">
                 {/* Header Section */}
                 <motion.header
                     layout
                     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="text-center mb-12 space-y-4"
+                    className="text-center mb-4 space-y-4"
                 >
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-lsl-blue text-[10px] font-bold uppercase tracking-widest border border-blue-100"
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-widest border border-white/20"
                     >
                         <MessageSquare size={12} />
                         Let's Get Started
                     </motion.div>
                     <motion.h1
                         layout="position"
-                        className="text-5xl md:text-6xl font-display font-bold text-lsl-black tracking-tight"
+                        className="text-5xl md:text-6xl font-display font-bold text-white tracking-tight"
                     >
                         Tell us what you need.
                     </motion.h1>
                     <motion.p
                         layout="position"
-                        className="text-gray-400 max-w-xl mx-auto font-sans font-light text-lg"
+                        className="text-gray-300 max-w-xl mx-auto font-light text-lg"
                     >
                         We've streamlined our process. Launch our guided order builder below to get your project moving.
                     </motion.p>
                 </motion.header>
+            </div>
+        </PageHero>
+
+        <div className="bg-[#f4f4f5] py-12 min-h-[50vh]">
+            <div className="container mx-auto px-4 max-w-4xl w-full">
 
                 <div className="w-full flex flex-col items-center">
                     <AnimatePresence mode="wait">
@@ -110,5 +112,6 @@ export const BuildOrderPage: React.FC<{ onNavigateToMockup?: () => void; onNavig
                 </div>
             </div>
         </div>
+        </>
     );
 };

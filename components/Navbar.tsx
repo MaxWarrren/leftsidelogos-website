@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, useScroll, useMotionValueEvent, AnimatePresence } from 'framer-motion';
-import { Menu, X, ShoppingBag } from 'lucide-react';
+import { Menu, X, ShoppingBag, User, LogOut, Building2 } from 'lucide-react';
 import { useCart } from './CartContext';
+import { useAuth } from './AuthContext';
 
 interface NavbarProps {
   currentPage: 'home' | 'mockup' | 'contact' | 'build-order' | 'catalog';
@@ -20,8 +21,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
   const [hidden, setHidden] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { getCartCount } = useCart();
   const cartCount = getCartCount();
+  const { isAuthenticated, profile, organization, openAuthModal, signOut, isLoading } = useAuth();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = scrollY.getPrevious() || 0;
@@ -65,12 +68,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
         }}
         animate={hidden ? "hidden" : "visible"}
         transition={{ duration: 0.35, ease: "easeInOut" }}
-        className={`fixed top-0 left-0 right-0 z-50 flex justify-center py-4 px-4 transition-all duration-300 ${scrolled ? 'py-2' : 'py-6'}`}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'py-2' : 'py-4'}`}
       >
         <div
-          className={`relative flex items-center justify-between px-6 py-3 rounded-full backdrop-blur-md transition-all duration-300 ${scrolled
-            ? 'bg-lsl-black/80 text-white shadow-lg w-full max-w-4xl border border-white/10'
-            : 'bg-white/50 text-lsl-black w-full max-w-5xl border border-white/40'
+          className={`flex items-center justify-between px-8 md:px-12 lg:px-16 py-3 transition-all duration-300 ${scrolled
+            ? 'bg-lsl-black/70 backdrop-blur-md shadow-lg border-b border-white/5'
+            : ''
             }`}
         >
           {/* Logo Image */}
@@ -82,9 +85,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
             <img
               src="/LSL_Logo.png"
               alt="Left Side Logos"
-              className={`h-10 w-auto object-contain transition-all duration-300 ${scrolled ? 'brightness-200 contrast-125' : ''}`}
+              className="h-10 w-auto object-contain brightness-200 contrast-125 transition-all duration-300"
             />
-            <span className={`font-display font-bold text-xl tracking-tighter ${scrolled ? 'text-white' : 'text-lsl-black'}`}>
+            <span className="font-display font-bold text-xl tracking-tighter text-white">
               Left Side Logos
             </span>
           </a>
@@ -96,8 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
                 key={item.name}
                 href={item.href}
                 onClick={(e) => handleNavClick(e, item)}
-                className={`text-sm font-medium transition-colors hover:text-lsl-blue ${currentPage === item.page && item.page !== 'home' ? 'text-lsl-blue font-bold' : ''
-                  } ${scrolled ? 'text-gray-300' : 'text-gray-600'}`}
+                className={`text-sm font-medium transition-colors hover:text-white ${currentPage === item.page && item.page !== 'home' ? 'text-white font-bold' : 'text-gray-400'}`}
               >
                 {item.name}
               </a>
@@ -106,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
             {/* Cart Icon */}
             <button
               onClick={() => { setCurrentPage('build-order'); window.scrollTo(0, 0); }}
-              className={`relative p-2 rounded-full transition-all hover:bg-white/10 ${scrolled ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-lsl-blue'}`}
+              className="relative p-2 rounded-full transition-all hover:bg-white/10 text-gray-400 hover:text-white"
               aria-label="View Cart"
               id="navbar-cart-btn"
             >
@@ -118,32 +120,100 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     exit={{ scale: 0 }}
-                    className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-lsl-blue text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1"
+                    className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-white text-lsl-black text-[10px] font-bold rounded-full flex items-center justify-center px-1"
                   >
                     {cartCount > 99 ? '99+' : cartCount}
                   </motion.span>
                 )}
               </AnimatePresence>
             </button>
+
+            {/* Auth Button */}
+            {isAuthenticated ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all bg-white/10 hover:bg-white/20 text-white"
+                  id="navbar-user-btn"
+                >
+                  <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
+                    <User className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold max-w-[100px] truncate">
+                    {profile?.full_name?.split(' ')[0] || 'Account'}
+                  </span>
+                </button>
+
+                {/* User Dropdown */}
+                <AnimatePresence>
+                  {userMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{profile?.full_name}</p>
+                        <p className="text-xs text-gray-400 truncate">{profile?.email}</p>
+                        {organization && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Building2 className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-500 truncate">{organization.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCurrentPage('portal');
+                          window.scrollTo(0, 0);
+                        }}
+                        className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <User className="h-4 w-4" />
+                        My Portal
+                      </button>
+                      <button
+                        onClick={() => signOut()}
+                        className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <button
+                onClick={openAuthModal}
+                className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide transition-all border border-white/30 text-white hover:bg-white hover:text-lsl-black"
+                id="navbar-login-btn"
+              >
+                Login
+              </button>
+            )}
           </div>
 
           {/* Mobile: Cart + Menu Toggle */}
           <div className="flex items-center gap-2 md:hidden">
             <button
               onClick={() => { setCurrentPage('build-order'); window.scrollTo(0, 0); }}
-              className="relative p-2"
+              className="relative p-2 text-white"
               aria-label="View Cart"
             >
               <ShoppingBag size={22} />
               {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-lsl-blue text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-white text-lsl-black text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-1"
+              className="p-1 text-white"
             >
               {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -163,11 +233,26 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, setCurrentPage }) =
               key={item.name}
               href={item.href}
               onClick={(e) => handleNavClick(e, item)}
-              className="text-2xl font-display font-bold tracking-wide hover:text-lsl-blue transition-colors"
+              className="text-2xl font-display font-bold tracking-wide hover:text-gray-300 transition-colors"
             >
               {item.name}
             </a>
           ))}
+          {isAuthenticated ? (
+            <button
+              onClick={() => { setMobileMenuOpen(false); signOut(); }}
+              className="text-lg font-display font-bold tracking-wide text-red-400 hover:text-red-300 transition-colors"
+            >
+              Sign Out
+            </button>
+          ) : (
+            <button
+              onClick={() => { setMobileMenuOpen(false); openAuthModal(); }}
+              className="text-lg font-display font-bold tracking-wide text-gray-400 hover:text-white transition-colors"
+            >
+              Log In / Sign Up
+            </button>
+          )}
           <button onClick={() => setMobileMenuOpen(false)} className="absolute top-8 right-8">
             <X size={32} />
           </button>

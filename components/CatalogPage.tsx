@@ -1,76 +1,81 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, ShoppingBag, ChevronLeft, ChevronRight, Tag, Ruler, Palette, ArrowRight, Minus, Plus, Check } from 'lucide-react';
-import { getAllProducts } from '../lib/sanity';
-import { urlFor } from '../lib/sanity';
+import { Search, X, ShoppingBag, ChevronLeft, ChevronRight, Tag, Ruler, Palette, ArrowRight, Minus, Plus, Check, Sparkles } from 'lucide-react';
+import { getAllProducts } from '../lib/supabase';
 import { useCart } from './CartContext';
+import { PageHero } from './PageHero';
 import type { CatalogProduct } from '../types';
 
 // ─── Fallback Products (using existing local images) ───
 const FALLBACK_PRODUCTS: CatalogProduct[] = [
   {
-    _id: 'local-1',
+    id: 'local-1',
     name: 'Richardson 112 Trucker Hat',
     category: 'Hats',
+    category_id: '',
     sku: '112',
     description: 'The industry-standard trucker hat. Pre-curved visor with adjustable snapback. Perfect for embroidery, heat transfer, and leather patches. A fan favorite for its comfort and clean profile.',
-    images: [],
-    localImages: ['/catalog_pictures/hats-112-1.png', '/catalog_pictures/hats-112-2.png'],
+    images: ['/catalog_pictures/hats-112-1.png', '/catalog_pictures/hats-112-2.png'],
     colors: ['Black/White', 'Navy/White', 'Charcoal/White', 'Red/White', 'Heather Grey/Black', 'All Black', 'Camo/Black'],
     sizes: ['OSFA (Adjustable)'],
-    basePrice: 18.00,
+    slug: 'richardson-112-trucker-hat',
+    base_price: 18.00,
     featured: true,
   },
   {
-    _id: 'local-2',
+    id: 'local-2',
     name: 'Richardson 6511 Rope Hat',
     category: 'Hats',
+    category_id: '',
     sku: '6511',
     description: 'Classic rope-front trucker hat with retro vibes. Structured crown with snapback closure. Great for embroidery and leather patch applications. Gives any brand an elevated, vintage look.',
-    images: [],
-    localImages: ['/catalog_pictures/hats-6511-1.png', '/catalog_pictures/hats-6511-2.png'],
+    images: ['/catalog_pictures/hats-6511-1.png', '/catalog_pictures/hats-6511-2.png'],
     colors: ['Black', 'Navy', 'Khaki/White', 'Charcoal/Black', 'White/Navy'],
     sizes: ['OSFA (Adjustable)'],
-    basePrice: 22.00,
+    slug: 'richardson-6511-rope-hat',
+    base_price: 22.00,
     featured: true,
   },
   {
-    _id: 'local-3',
+    id: 'local-3',
     name: 'Gildan 2000 Classic Tee',
     category: 'T-Shirts',
+    category_id: '',
     sku: '2000',
     description: 'A reliable everyday tee with a classic fit. 100% ring-spun cotton for softness and durability. Ideal for DTF prints, screen printing, and heat transfer. Budget-friendly without sacrificing quality.',
-    images: [],
-    localImages: ['/catalog_pictures/shirts-2000-1.png'],
+    images: ['/catalog_pictures/shirts-2000-1.png'],
     colors: ['Black', 'White', 'Navy', 'Sport Grey', 'Red', 'Royal Blue', 'Forest Green', 'Charcoal'],
     sizes: ['S', 'M', 'L', 'XL', '2XL', '3XL'],
-    basePrice: 14.00,
+    slug: 'gildan-2000-classic-tee',
+    base_price: 14.00,
     featured: false,
   },
   {
-    _id: 'local-4',
+    id: 'local-4',
     name: 'Bella+Canvas 3001 CVC Tee',
     category: 'T-Shirts',
+    category_id: '',
     sku: '3001CVC',
     description: 'Premium retail-quality tee with a modern, fitted silhouette. CVC blend (cotton/polyester) delivers an incredibly soft hand feel. Perfect for DTF and heat transfer — your go-to when quality matters.',
-    images: [],
-    localImages: ['/catalog_pictures/shirts-3001cvc-1.png'],
+    images: ['/catalog_pictures/shirts-3001cvc-1.png'],
     colors: ['Black', 'White', 'Heather Navy', 'Heather Slate', 'Athletic Heather', 'Red', 'True Royal', 'Dark Grey Heather'],
     sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
-    basePrice: 18.00,
+    slug: 'bella-canvas-3001-cvc-tee',
+    base_price: 18.00,
     featured: true,
   },
   {
-    _id: 'local-5',
+    id: 'local-5',
     name: 'Gildan 5000 Heavy Cotton Tee',
     category: 'T-Shirts',
+    category_id: '',
     sku: '5000',
     description: 'The workhorse tee — heavyweight 5.3oz cotton built to last. Wide color range and consistent sizing make it the industry standard for custom prints. Great for events, crews, and bulk orders.',
-    images: [],
-    localImages: ['/catalog_pictures/shirts-5000-1.png'],
+    images: ['/catalog_pictures/shirts-5000-1.png'],
     colors: ['Black', 'White', 'Navy', 'Red', 'Royal', 'Sport Grey', 'Forest Green', 'Cardinal Red', 'Safety Green'],
     sizes: ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
-    basePrice: 12.00,
+    slug: 'gildan-5000-heavy-cotton-tee',
+    base_price: 12.00,
     featured: false,
   },
 ];
@@ -88,12 +93,12 @@ const categoryIcons: Record<string, string> = {
 
 interface CatalogPageProps {
   onNavigateToCart?: () => void;
+  onNavigateToMockupWithProduct?: (product: CatalogProduct) => void;
 }
 
 // ─── Product Card ───
 const ProductCard: React.FC<{ product: CatalogProduct; onClick: () => void; index: number }> = ({ product, onClick, index }) => {
-  const primaryImage = product.localImages?.[0]
-    || (product.images?.[0] ? urlFor(product.images[0]).width(600).url() : null);
+  const primaryImage = product.images?.[0] || null;
 
   return (
     <motion.div
@@ -140,7 +145,7 @@ const ProductCard: React.FC<{ product: CatalogProduct; onClick: () => void; inde
         <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">SKU: {product.sku}</p>
         <div className="flex items-center justify-between">
           <span className="text-xl font-display font-bold text-lsl-blue">
-            ${product.basePrice.toFixed(2)}
+            ${product.base_price.toFixed(2)}
           </span>
           <span className="text-xs text-gray-400 font-medium">
             {product.colors.length} colors · {product.sizes.length} sizes
@@ -156,34 +161,32 @@ const ProductModal: React.FC<{
   product: CatalogProduct;
   onClose: () => void;
   onNavigateToCart?: () => void;
-}> = ({ product, onClose, onNavigateToCart }) => {
+  onNavigateToMockupWithProduct?: (product: CatalogProduct) => void;
+}> = ({ product, onClose, onNavigateToCart, onNavigateToMockupWithProduct }) => {
   const { addToCart } = useCart();
-  const allImages = product.localImages?.length
-    ? product.localImages
-    : product.images?.map(img => urlFor(img).width(800).url()) || [];
+  const allImages = product.images || [];
 
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
   const [selectedColor, setSelectedColor] = useState(product.colors[0] || '');
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] || '');
   const [quantity, setQuantity] = useState(1);
-  const [addedFeedback, setAddedFeedback] = useState(false);
+  const [showMockupPrompt, setShowMockupPrompt] = useState(false);
 
   const primaryImage = allImages[0] || null;
 
   const handleAddToCart = () => {
     addToCart({
-      productId: product._id,
+      productId: product.id,
       productName: product.name,
       sku: product.sku,
       category: product.category,
       color: selectedColor,
       size: selectedSize,
       quantity,
-      basePrice: product.basePrice,
+      basePrice: product.base_price,
       image: primaryImage,
     });
-    setAddedFeedback(true);
-    setTimeout(() => setAddedFeedback(false), 2000);
+    setShowMockupPrompt(true);
     setQuantity(1);
   };
 
@@ -274,7 +277,7 @@ const ProductModal: React.FC<{
             </h2>
 
             <p className="text-3xl font-display font-bold text-lsl-blue mb-6">
-              ${product.basePrice.toFixed(2)}
+              ${product.base_price.toFixed(2)}
               <span className="text-sm font-sans font-normal text-gray-400 ml-2">per unit</span>
             </p>
 
@@ -363,7 +366,7 @@ const ProductModal: React.FC<{
                   <Plus className="w-4 h-4" />
                 </button>
                 <span className="text-sm text-gray-400 ml-2">
-                  = <span className="font-bold text-gray-700">${(quantity * product.basePrice).toFixed(2)}</span>
+                  = <span className="font-bold text-gray-700">${(quantity * product.base_price).toFixed(2)}</span>
                 </span>
               </div>
             </div>
@@ -372,35 +375,74 @@ const ProductModal: React.FC<{
             <div className="mt-auto space-y-3">
               <button
                 onClick={handleAddToCart}
-                disabled={addedFeedback}
-                className={`w-full group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg shadow-lg transition-all duration-300 ${
-                  addedFeedback
-                    ? 'bg-green-500 text-white shadow-green-500/20'
-                    : 'bg-lsl-blue text-white hover:shadow-xl hover:bg-lsl-black'
-                }`}
+                disabled={showMockupPrompt}
+                className="w-full group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg shadow-lg transition-all duration-300 bg-lsl-black text-white hover:shadow-xl"
               >
-                {addedFeedback ? (
-                  <>
-                    <Check className="w-5 h-5" />
-                    <span>Added to Cart!</span>
-                  </>
-                ) : (
-                  <>
-                    <ShoppingBag className="w-5 h-5" />
-                    <span>Add to Cart</span>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
+                <ShoppingBag className="w-5 h-5" />
+                <span>Add to Cart</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
+              {onNavigateToMockupWithProduct && (
+                <button
+                  onClick={() => { onClose(); onNavigateToMockupWithProduct(product); }}
+                  className="w-full group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg border-2 border-gray-200 text-gray-600 hover:border-lsl-black hover:text-lsl-black transition-all"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  <span>Visualize in Mockup Studio</span>
+                </button>
+              )}
               {onNavigateToCart && (
                 <button
                   onClick={() => { onClose(); onNavigateToCart(); }}
-                  className="w-full py-3 text-center text-sm font-semibold text-gray-400 hover:text-lsl-blue transition-colors"
+                  className="w-full py-3 text-center text-sm font-semibold text-gray-400 hover:text-lsl-black transition-colors"
                 >
                   View Cart & Build Order →
                 </button>
               )}
             </div>
+
+            {/* Mockup Prompt Overlay */}
+            <AnimatePresence>
+              {showMockupPrompt && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center p-8 text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                    className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-6"
+                  >
+                    <Check className="w-8 h-8 text-green-600" />
+                  </motion.div>
+                  <h3 className="text-2xl font-display font-bold text-lsl-black mb-2">Added to Cart!</h3>
+                  <p className="text-gray-500 font-light mb-8 max-w-xs">
+                    Would you like to see how your logo looks on the <span className="font-semibold text-lsl-black">{product.name}</span>?
+                  </p>
+                  <div className="w-full space-y-3 max-w-xs">
+                    {onNavigateToMockupWithProduct && (
+                      <button
+                        onClick={() => { onClose(); onNavigateToMockupWithProduct(product); }}
+                        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-lsl-black text-white rounded-2xl font-bold text-base hover:shadow-xl transition-all"
+                      >
+                        <Sparkles className="w-5 h-5" />
+                        Generate Mockup
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowMockupPrompt(false)}
+                      className="w-full py-3 text-sm font-semibold text-gray-400 hover:text-lsl-black transition-colors"
+                    >
+                      Continue Shopping
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </motion.div>
@@ -424,7 +466,7 @@ const SkeletonCard: React.FC = () => (
 );
 
 // ─── Main Catalog Page ───
-export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) => {
+export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart, onNavigateToMockupWithProduct }) => {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
@@ -433,23 +475,23 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) =>
   const { getCartCount } = useCart();
   const cartCount = getCartCount();
 
-  // Fetch products from Sanity, fallback to local data
+  // Fetch products from Supabase, fallback to local data
   useEffect(() => {
     let mounted = true;
     async function fetchProducts() {
       try {
-        const sanityProducts = await getAllProducts();
+        const supabaseProducts = await getAllProducts();
         if (mounted) {
-          if (sanityProducts && sanityProducts.length > 0) {
-            setProducts(sanityProducts);
+          if (supabaseProducts && supabaseProducts.length > 0) {
+            setProducts(supabaseProducts);
           } else {
-            // Use fallback local data if Sanity has no products yet
+            // Use fallback local data if Supabase has no products yet
             setProducts(FALLBACK_PRODUCTS);
           }
           setLoading(false);
         }
       } catch (err) {
-        console.warn('Sanity fetch failed, using local catalog data:', err);
+        console.warn('Supabase fetch failed, using local catalog data:', err);
         if (mounted) {
           setProducts(FALLBACK_PRODUCTS);
           setLoading(false);
@@ -480,34 +522,23 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) =>
   return (
     <>
       {/* Hero Banner */}
-      <section className="relative pt-32 pb-20 bg-white overflow-hidden border-b border-gray-100">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-[0.05]">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, #000 1px, transparent 0)`,
-            backgroundSize: '40px 40px'
-          }} />
-        </div>
-        {/* Gradient Orbs */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-lsl-blue/10 rounded-full blur-[150px] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/3 pointer-events-none" />
-
-        <div className="container mx-auto px-4 relative z-10">
+      <PageHero className="pt-32 pb-20">
+        <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             className="text-center"
           >
-            <span className="inline-block px-4 py-1.5 bg-lsl-blue/10 text-lsl-blue text-xs font-bold uppercase tracking-[0.2em] rounded-full mb-6 border border-lsl-blue/20">
+            <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur-sm text-white text-xs font-bold uppercase tracking-[0.2em] rounded-full mb-6 border border-white/20">
               <Tag className="w-3 h-3 inline mr-2 -mt-0.5" />
               Product Catalog
             </span>
-            <h1 className="text-4xl md:text-6xl font-display font-bold text-gray-900 mb-4 leading-tight">
-              Premium <span className="text-lsl-blue">Blanks</span> for<br />
+            <h1 className="text-4xl md:text-6xl font-display font-bold text-white mb-4 leading-tight">
+              Premium Blanks for<br />
               Your Custom Designs
             </h1>
-            <p className="text-lg text-gray-500 max-w-2xl mx-auto font-light">
+            <p className="text-lg text-gray-300 max-w-2xl mx-auto font-light">
               Browse our curated selection of high-quality apparel and accessories. Every item is ready for your custom branding.
             </p>
             {/* Cart floating indicator */}
@@ -516,7 +547,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) =>
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 onClick={onNavigateToCart}
-                className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-lsl-blue text-white rounded-full font-bold text-sm hover:bg-lsl-black hover:shadow-lg transition-all"
+                className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-white text-lsl-black rounded-full font-bold text-sm hover:bg-gray-100 hover:shadow-lg transition-all"
               >
                 <ShoppingBag className="w-4 h-4" />
                 View Cart ({cartCount} items)
@@ -525,7 +556,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) =>
             )}
           </motion.div>
         </div>
-      </section>
+      </PageHero>
 
       {/* Filters + Grid */}
       <section className="py-12 bg-[#f4f4f5] min-h-[60vh]">
@@ -605,7 +636,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) =>
               <AnimatePresence mode="popLayout">
                 {filteredProducts.map((product, index) => (
                   <ProductCard
-                    key={product._id}
+                    key={product.id}
                     product={product}
                     index={index}
                     onClick={() => setSelectedProduct(product)}
@@ -624,6 +655,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart }) =>
             product={selectedProduct}
             onClose={() => setSelectedProduct(null)}
             onNavigateToCart={onNavigateToCart}
+            onNavigateToMockupWithProduct={onNavigateToMockupWithProduct}
           />
         )}
       </AnimatePresence>

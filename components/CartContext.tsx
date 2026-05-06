@@ -99,6 +99,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         group.variants.push(variant);
         group.totalQuantity += item.quantity;
         group.subtotal += item.quantity * item.basePrice;
+        // Keep the first mockup found for this product group
+        if (!group.mockupUrl && item.mockupUrl) {
+          group.mockupUrl = item.mockupUrl;
+        }
       } else {
         map.set(item.productId, {
           productId: item.productId,
@@ -107,6 +111,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           category: item.category,
           basePrice: item.basePrice,
           image: item.image,
+          mockupUrl: item.mockupUrl || null,
           variants: [variant],
           totalQuantity: item.quantity,
           subtotal: item.quantity * item.basePrice,

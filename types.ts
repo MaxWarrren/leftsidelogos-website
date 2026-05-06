@@ -30,25 +30,24 @@ export interface OrderItem {
 }
 
 export interface CatalogProduct {
-  _id: string;
+  id: string;
   name: string;
-  slug?: { current: string };
+  slug: string;
   category: string;
+  category_id: string;
   sku: string;
   description?: string;
-  images: any[]; // Sanity image references or local URLs
+  images: string[]; // Supabase Storage paths or local paths
   colors: string[];
   sizes: string[];
-  basePrice: number;
+  base_price: number;
   featured?: boolean;
-  // For local fallback products
-  localImages?: string[];
 }
 
 export interface CatalogCategory {
-  _id: string;
+  id: string;
   name: string;
-  slug?: { current: string };
+  slug: string;
   description?: string;
 }
 
@@ -62,7 +61,8 @@ export interface CartItem {
   size: string;
   quantity: number;
   basePrice: number;
-  image: string | null; // Sanity CDN URL or local path
+  image: string | null; // Supabase Storage URL or local path
+  mockupUrl?: string | null; // AI-generated mockup image (base64 data URL)
 }
 
 export interface GroupedCartItem {
@@ -72,6 +72,7 @@ export interface GroupedCartItem {
   category: string;
   basePrice: number;
   image: string | null;
+  mockupUrl?: string | null;
   variants: { id: string; color: string; size: string; quantity: number }[];
   totalQuantity: number;
   subtotal: number;

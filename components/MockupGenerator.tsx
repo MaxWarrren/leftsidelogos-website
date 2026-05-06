@@ -1,29 +1,103 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image as ImageIcon, Send, Loader2, Upload, Sparkles, ShoppingBag, Maximize2, X, Mail } from 'lucide-react';
+import { Send, Loader2, Upload, Sparkles, ShoppingBag, Maximize2, X, Save, Check, Lock, ChevronDown } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
+import { getAllProducts } from '../lib/supabase';
+import { useCart } from './CartContext';
+import { PageHero } from './PageHero';
+import { MediaPicker, type MediaItem } from './MediaPicker';
+import type { CatalogProduct } from '../types';
+
+// ─── Placement options by category slug ───
+const PLACEMENT_OPTIONS: Record<string, string[]> = {
+    't-shirts': ['Center Chest', 'Left Chest', 'Right Chest', 'Full Back', 'Upper Back', 'Left Sleeve', 'Right Sleeve'],
+    'hoodies': ['Center Chest', 'Left Chest', 'Full Back', 'Upper Back', 'Hood', 'Kangaroo Pocket', 'Left Sleeve', 'Right Sleeve'],
+    'hats': ['Front Center', 'Front Left', 'Front Right', 'Side Left', 'Side Right', 'Back'],
+    'accessories': ['Center', 'Front', 'Back', 'Side'],
+};
+const DEFAULT_PLACEMENTS = ['Center Chest', 'Left Chest', 'Full Back', 'Left Sleeve', 'Right Sleeve'];
 
 interface MockupGeneratorProps {
     onSwitchToQuote: () => void;
+    product?: CatalogProduct | null;
+    onNavigateToBuildOrder?: () => void;
 }
 
-export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuote }) => {
+export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuote, product, onNavigateToBuildOrder }) => {
     const [mockupPrompt, setMockupPrompt] = useState('');
     const [mockupImage, setMockupImage] = useState<File | null>(null);
     const [mockupPreview, setMockupPreview] = useState<string | null>(null);
     const [generatedMockup, setGeneratedMockup] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [savedToMedia, setSavedToMedia] = useState(false);
 
-    // Changed to text inputs
-    const [itemType, setItemType] = useState('T-Shirt');
+    // Form states
+    const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(product || null);
     const [viewAngle, setViewAngle] = useState('Front View');
-    const [logoPlacement, setLogoPlacement] = useState('Center Chest');
-    const [color, setColor] = useState('White');
+    const [logoPlacements, setLogoPlacements] = useState<string[]>(['Center Chest']);
+    const [color, setColor] = useState(product?.colors[0] || 'White');
 
     const [aspectRatio, setAspectRatio] = useState<'1:1' | '3:4' | '4:3' | '9:16' | '16:9'>('1:1');
-    const [showEmailModal, setShowEmailModal] = useState(false);
-    const [email, setEmail] = useState(localStorage.getItem('lsl_user_email') || '');
+    const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Product catalog for dropdown
+    const [allProducts, setAllProducts] = useState<CatalogProduct[]>([]);
+    const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+    
+    const { isAuthenticated, user, organization, openAuthModal } = useAuth();
+    const { items: cartItems } = useCart();
+
+    // Fetch all products for the dropdown
+    useEffect(() => {
+        getAllProducts().then((products) => setAllProducts(products as CatalogProduct[]));
+    }, []);
+
+    // Update state if product prop changes
+    useEffect(() => {
+        if (product) {
+            setSelectedProduct(product);
+            setColor(product.colors[0] || 'White');
+        }
+    }, [product]);
+
+    // Get category slug for the selected product
+    const categorySlug = selectedProduct
+        ? allProducts.find(p => p.id === selectedProduct.id)?.category?.toLowerCase().replace(/\s+/g, '-') || ''
+        : '';
+    const availablePlacements = PLACEMENT_OPTIONS[categorySlug] || DEFAULT_PLACEMENTS;
+
+    // Reset placements when category changes
+    useEffect(() => {
+        setLogoPlacements(prev => {
+            const valid = prev.filter(p => availablePlacements.includes(p));
+            return valid.length > 0 ? valid : [availablePlacements[0]];
+        });
+    }, [categorySlug]);
+
+    const togglePlacement = (placement: string) => {
+        setLogoPlacements(prev => {
+            if (prev.includes(placement)) {
+                return prev.length > 1 ? prev.filter(p => p !== placement) : prev;
+            }
+            return [...prev, placement];
+        });
+    };
+
+    // Separate cart products from others for the dropdown
+    const cartProductIds = new Set(cartItems.map(ci => ci.productId));
+    const inCartProducts = allProducts.filter(p => cartProductIds.has(p.id));
+    const otherProducts = allProducts.filter(p => !cartProductIds.has(p.id));
+    // Group others by category
+    const groupedOthers = otherProducts.reduce<Record<string, CatalogProduct[]>>((acc, p) => {
+        const cat = p.category || 'Other';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(p);
+        return acc;
+    }, {});
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -37,10 +111,35 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
         }
     };
 
+    const handleMediaSelect = async (items: MediaItem[]) => {
+        if (items.length === 0) return;
+        const item = items[0];
+        
+        try {
+            const { data } = await supabase.storage.from('organization-assets').createSignedUrl(item.file_path, 60);
+            if (!data?.signedUrl) throw new Error("Could not get image url");
+            
+            const res = await fetch(data.signedUrl);
+            const blob = await res.blob();
+            
+            const file = new File([blob], item.file_name, { type: item.file_type });
+            setMockupImage(file);
+            
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setMockupPreview(ev.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to load selected media.");
+        }
+    };
+
     const handleGenerateClick = () => {
         if (!mockupImage) return;
-        if (!email) {
-            setShowEmailModal(true);
+        if (!isAuthenticated) {
+            openAuthModal();
         } else {
             generateMockup();
         }
@@ -49,7 +148,6 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
     const generateMockup = async () => {
         setIsGenerating(true);
         setGeneratedMockup(null);
-        setShowEmailModal(false);
 
         try {
             const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -63,18 +161,19 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
             const base64Image = mockupPreview?.split(',')[1] || '';
             const mimeType = mockupImage?.type || 'image/png';
 
+            const itemName = selectedProduct?.name || 'T-Shirt';
             const prompt = `You are an elite product photography AI for "Left Side Logos". 
         TASK: Create a photorealistic, commercial-grade product mockup.
-        PRODUCT: ${color} ${itemType}.
+        PRODUCT: ${color} ${itemName}.
         ANGLE: ${viewAngle}.
-        LOGO PLACEMENT: ${logoPlacement}.
-        LOGO: Naturally integrate the uploaded artwork onto the garment. Ensure the logo follows the fabric's curves, wrinkles, and lighting.
+        LOGO PLACEMENTS: ${logoPlacements.join(', ')}.
+        LOGO: Naturally integrate the uploaded artwork onto the garment at each specified placement. Ensure the logo follows the fabric's curves, wrinkles, and lighting.
         MANDATORY STYLE: The rendered image MUST be large, centered, and take up the full frame. No excessive white space around the product.
         ADDITIONAL DETAILS: ${mockupPrompt}.
         ENVIRONMENT: Professional, minimalist studio with soft directional lighting.`;
 
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
+                model: 'gemini-3.1-flash-image-preview',
                 contents: [
                     {
                         parts: [
@@ -114,44 +213,108 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
         }
     };
 
-    const handleEmailSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (email) {
-            localStorage.setItem('lsl_user_email', email);
-            generateMockup();
+    const handleSaveToMedia = async () => {
+        if (!generatedMockup || !isAuthenticated || !organization || !user) return;
+        setIsSaving(true);
+        try {
+            const res = await fetch(generatedMockup);
+            const blob = await res.blob();
+
+            const baseName = selectedProduct ? selectedProduct.name : 'Mockup';
+            const fileName = `${baseName}-Mockup-${Date.now()}.png`.replace(/[^a-zA-Z0-9-.]/g, '-').replace(/-+/g, '-');
+            const filePath = `${organization.id}/Mockups/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('organization-assets')
+                .upload(filePath, blob, { contentType: 'image/png' });
+
+            if (uploadError) throw uploadError;
+
+            const { error: dbError } = await supabase.from('media_items').insert({
+                organization_id: organization.id,
+                uploader_id: user.id,
+                file_path: filePath,
+                file_name: fileName,
+                file_type: 'image/png',
+                size: blob.size,
+                category: 'Mockups',
+            });
+
+            if (dbError) throw dbError;
+
+            setSavedToMedia(true);
+            setTimeout(() => setSavedToMedia(false), 3000);
+        } catch (err) {
+            console.error('Failed to save mockup:', err);
+            alert('Failed to save mockup. Please try again.');
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    return (
-        <div className="pt-32 pb-20 min-h-screen bg-[#fcfcfd] relative overflow-hidden">
-            {/* Airy Background Decoration */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.03]">
-                <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-            </div>
+    // If not authenticated, show gate
+    if (!isAuthenticated) {
+        return (
+            <PageHero className="pt-32 pb-20 min-h-[85vh] flex items-center justify-center">
+                <div className="text-center space-y-6 max-w-md mx-auto px-4">
+                    <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto text-white mb-8 border border-white/20">
+                        <Lock size={32} />
+                    </div>
+                    <h1 className="text-4xl font-display font-bold text-white">Mockup Studio</h1>
+                    <p className="text-gray-300 font-light">
+                        Our AI-powered visualization engine is an exclusive tool for registered users. Log in or create a free account to start designing.
+                    </p>
+                    <button
+                        onClick={openAuthModal}
+                        className="w-full py-4 bg-white text-lsl-black rounded-2xl font-bold hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                    >
+                        Log In to Access
+                    </button>
+                    <button
+                        onClick={onSwitchToQuote}
+                        className="text-sm font-bold text-gray-400 hover:text-white transition-colors pt-4"
+                    >
+                        Skip to Build Order →
+                    </button>
+                </div>
+            </PageHero>
+        );
+    }
 
-            <div className="container mx-auto px-4 relative z-10 max-w-7xl">
-                <header className="text-center mb-16 space-y-4">
+    return (
+        <>
+        <PageHero className="pt-32 pb-16">
+            <div className="container mx-auto px-4 max-w-7xl">
+                <header className="text-center space-y-4">
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-lsl-blue text-[10px] font-bold uppercase tracking-widest border border-blue-100"
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-widest border border-white/20"
                     >
                         <Sparkles size={12} />
                         AI Powered Visualization
                     </motion.div>
-                    <h1 className="text-5xl md:text-6xl font-display font-bold text-lsl-black tracking-tight">Mockup Studio</h1>
-                    <p className="text-gray-400 max-w-xl mx-auto font-sans font-light text-lg">
-                        Experience our premium apparel library. Upload your artwork and let our AI handle the rendering with studio precision.
+                    <h1 className="text-5xl md:text-6xl font-display font-bold text-white tracking-tight">Mockup Studio</h1>
+                    <p className="text-gray-300 max-w-xl mx-auto font-light text-lg">
+                        {product 
+                            ? `Visualizing ${product.name}. Upload your artwork and let our AI handle the rendering with studio precision.`
+                            : `Experience our premium apparel library. Upload your artwork and let our AI handle the rendering with studio precision.`
+                        }
                     </p>
 
                     <button
                         onClick={onSwitchToQuote}
-                        className="text-xs font-bold text-gray-400 hover:text-lsl-blue transition-colors flex items-center justify-center gap-2 mx-auto pt-2 group"
+                        className="text-xs font-bold text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-2 mx-auto pt-2 group"
                     >
                         <ShoppingBag size={14} className="group-hover:scale-110 transition-transform" />
-                        Interested in pricing? <span className="underline decoration-blue-200 underline-offset-4">Jump to Build Your Order</span>
+                        Interested in pricing? <span className="underline decoration-white/30 underline-offset-4">Jump to Build Your Order</span>
                     </button>
                 </header>
+            </div>
+        </PageHero>
+
+        <div className="bg-[#f4f4f5] py-12 min-h-[60vh]">
+            <div className="container mx-auto px-4 max-w-7xl">
 
                 <div className="grid lg:grid-cols-12 gap-12 items-start">
                     {/* Controls Panel */}
@@ -166,11 +329,10 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
                             </div>
 
                             <div
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={() => setIsMediaPickerOpen(true)}
                                 className={`group relative border-2 border-dashed rounded-3xl p-10 text-center cursor-pointer transition-all duration-300 ${mockupPreview ? 'border-lsl-blue/20 bg-blue-50/10' : 'border-gray-200 hover:border-lsl-blue/40 hover:bg-gray-50'
                                     }`}
                             >
-                                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                                 {mockupPreview ? (
                                     <div className="relative h-48 w-full flex items-center justify-center">
                                         <img src={mockupPreview} alt="Preview" className="max-h-full max-w-full object-contain" />
@@ -196,17 +358,100 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
                         <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6">
                             <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">02. Scene Configuration</h3>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Apparel Type</label>
-                                    <input
-                                        type="text"
-                                        value={itemType}
-                                        onChange={(e) => setItemType(e.target.value)}
-                                        placeholder="e.g. T-Shirt, Hoodie"
-                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
-                                    />
+                            {/* Apparel Type - Product Dropdown */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Apparel Type</label>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setProductDropdownOpen(!productDropdownOpen)}
+                                        className="w-full p-4 bg-gray-50 rounded-2xl text-left font-medium text-sm text-gray-700 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                                    >
+                                        <span className={selectedProduct ? 'text-gray-900' : 'text-gray-400'}>
+                                            {selectedProduct ? selectedProduct.name : 'Select a product...'}
+                                        </span>
+                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${productDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {productDropdownOpen && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -4 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -4 }}
+                                                className="absolute z-30 top-full mt-2 w-full bg-white border border-gray-200 rounded-2xl shadow-xl max-h-64 overflow-y-auto"
+                                            >
+                                                {/* In Cart section */}
+                                                {inCartProducts.length > 0 && (
+                                                    <>
+                                                        <div className="px-4 py-2 bg-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 flex items-center gap-1.5 sticky top-0">
+                                                            <ShoppingBag className="w-3 h-3" /> In Your Cart
+                                                        </div>
+                                                        {inCartProducts.map(p => (
+                                                            <button
+                                                                key={p.id}
+                                                                onClick={() => { setSelectedProduct(p); setColor(p.colors[0] || 'White'); setProductDropdownOpen(false); }}
+                                                                className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors flex items-center justify-between ${selectedProduct?.id === p.id ? 'bg-lsl-black/5 font-bold' : ''}`}
+                                                            >
+                                                                <span>{p.name}</span>
+                                                                <span className="text-[10px] text-gray-400">{p.category}</span>
+                                                            </button>
+                                                        ))}
+                                                    </>
+                                                )}
+                                                {/* All other products grouped by category */}
+                                                {Object.entries(groupedOthers).map(([cat, products]) => (
+                                                    <div key={cat}>
+                                                        <div className="px-4 py-2 bg-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 sticky top-0">
+                                                            {cat}
+                                                        </div>
+                                                        {products.map(p => (
+                                                            <button
+                                                                key={p.id}
+                                                                onClick={() => { setSelectedProduct(p); setColor(p.colors[0] || 'White'); setProductDropdownOpen(false); }}
+                                                                className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors ${selectedProduct?.id === p.id ? 'bg-lsl-black/5 font-bold' : ''}`}
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ))}
+                                                {allProducts.length === 0 && (
+                                                    <div className="px-4 py-6 text-sm text-gray-400 text-center">Loading products...</div>
+                                                )}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* Color */}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Color</label>
+                                    {selectedProduct && selectedProduct.colors.length > 0 ? (
+                                        <div className="relative">
+                                            <select
+                                                value={color}
+                                                onChange={(e) => setColor(e.target.value)}
+                                                className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm appearance-none cursor-pointer"
+                                            >
+                                                {selectedProduct.colors.map(c => (
+                                                    <option key={c} value={c}>{c}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        </div>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={color}
+                                            onChange={(e) => setColor(e.target.value)}
+                                            placeholder="e.g. White, Black"
+                                            className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm placeholder:text-gray-300"
+                                        />
+                                    )}
+                                </div>
+                                {/* Camera Angle */}
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Camera Angle</label>
                                     <input
@@ -214,39 +459,33 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
                                         value={viewAngle}
                                         onChange={(e) => setViewAngle(e.target.value)}
                                         placeholder="e.g. Front, Flat Lay"
-                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
+                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm placeholder:text-gray-300"
                                     />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Colors</label>
-                                    <input
-                                        type="text"
-                                        value={color}
-                                        onChange={(e) => setColor(e.target.value)}
-                                        placeholder="e.g. White, Black, Navy"
-                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Logo Placement</label>
-                                    <input
-                                        type="text"
-                                        value={logoPlacement}
-                                        onChange={(e) => setLogoPlacement(e.target.value)}
-                                        placeholder="e.g. Center Chest, Left Pocket"
-                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none font-medium text-gray-700 text-sm focus:ring-2 focus:ring-lsl-blue/10 transition-all placeholder:text-gray-300"
-                                    />
+                            {/* Logo Placements - Multi-select chips */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Logo Placement(s)</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {availablePlacements.map((placement) => (
+                                        <button
+                                            key={placement}
+                                            onClick={() => togglePlacement(placement)}
+                                            className={`px-4 py-2 text-xs font-bold rounded-full border transition-all ${logoPlacements.includes(placement) ? 'bg-lsl-black text-white border-lsl-black' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}
+                                        >
+                                            {placement}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
 
+                            {/* Aspect Ratio */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Aspect Ratio</label>
                                 <div className="flex flex-wrap gap-2">
                                     {(['1:1', '3:4', '4:3', '9:16', '16:9'] as const).map((ratio) => (
-                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`px-4 py-2 text-[10px] font-bold rounded-full border transition-all ${aspectRatio === ratio ? 'bg-lsl-blue text-white border-lsl-blue' : 'bg-white text-gray-500 border-gray-200 hover:border-lsl-blue/40'}`}>
+                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`px-4 py-2 text-[10px] font-bold rounded-full border transition-all ${aspectRatio === ratio ? 'bg-lsl-black text-white border-lsl-black' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                                             {ratio}
                                         </button>
                                     ))}
@@ -273,14 +512,31 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
                     </div>
 
                     {/* Result Display */}
-                    <div className="lg:col-span-7 h-full flex flex-col">
+                    <div className="lg:col-span-7 h-full flex flex-col space-y-6">
                         <div className={`relative flex-grow bg-white rounded-[3rem] p-4 flex flex-col items-center justify-center min-h-[600px] shadow-sm border border-gray-100 overflow-hidden transition-all duration-700 ${isGenerating ? 'blur-sm grayscale' : ''}`}>
                             {generatedMockup ? (
                                 <div className="relative w-full h-full flex items-center justify-center">
                                     <motion.img initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} src={generatedMockup} alt="Generated Mockup" className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl shadow-blue-900/10" />
-                                    <button onClick={() => setGeneratedMockup(null)} className="absolute top-6 right-6 bg-white/80 hover:bg-white backdrop-blur-md p-3 rounded-full text-lsl-black shadow-lg shadow-black/5 transition-all active:scale-95">
-                                        <X size={20} />
-                                    </button>
+                                    <div className="absolute top-6 right-6 flex items-center gap-2">
+                                        {isAuthenticated && (
+                                            <button
+                                                onClick={handleSaveToMedia}
+                                                disabled={isSaving || savedToMedia}
+                                                className={`backdrop-blur-md p-3 rounded-full shadow-lg shadow-black/5 transition-all active:scale-95 flex items-center gap-2 text-sm font-bold ${savedToMedia ? 'bg-green-500 text-white' : 'bg-white/80 hover:bg-white text-lsl-black'}`}
+                                            >
+                                                {savedToMedia ? (
+                                                    <><Check size={18} /> Saved!</>
+                                                ) : isSaving ? (
+                                                    <Loader2 size={18} className="animate-spin" />
+                                                ) : (
+                                                    <><Save size={18} /> Save to Media</>
+                                                )}
+                                            </button>
+                                        )}
+                                        <button onClick={() => { setGeneratedMockup(null); setSavedToMedia(false); }} className="bg-white/80 hover:bg-white backdrop-blur-md p-3 rounded-full text-lsl-black shadow-lg shadow-black/5 transition-all active:scale-95">
+                                            <X size={20} />
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="text-center space-y-4">
@@ -313,47 +569,19 @@ export const MockupGenerator: React.FC<MockupGeneratorProps> = ({ onSwitchToQuot
                                 <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-lsl-black">Mockup Engine v2.1</span>
                             </div>
                         </div>
+
+                        </div>
                     </div>
                 </div>
             </div>
-
-            {/* Email Collection Modal */}
-            <AnimatePresence>
-                {showEmailModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowEmailModal(false)} className="absolute inset-0 bg-lsl-black/40 backdrop-blur-sm" />
-                        <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl">
-                            <button onClick={() => setShowEmailModal(false)} className="absolute top-6 right-6 text-gray-300 hover:text-gray-600 transition-colors"><X size={20} /></button>
-
-                            <div className="text-center space-y-6">
-                                <div className="w-16 h-16 bg-blue-50 text-lsl-blue rounded-full flex items-center justify-center mx-auto">
-                                    <Mail size={32} />
-                                </div>
-                                <div>
-                                    <h2 className="text-3xl font-display font-bold text-lsl-black mb-2">Almost there!</h2>
-                                    <p className="text-gray-500 font-light text-sm">Where should we save your generated mockups?</p>
-                                </div>
-
-                                <form onSubmit={handleEmailSubmit} className="space-y-4">
-                                    <input
-                                        type="email"
-                                        required
-                                        placeholder="Enter your email address"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none text-sm font-medium focus:ring-2 focus:ring-lsl-blue/10 transition-all text-center"
-                                        autoFocus
-                                    />
-                                    <button type="submit" className="w-full py-4 bg-lsl-blue text-white rounded-2xl font-bold hover:shadow-xl transition-all active:scale-95">
-                                        Start Generating
-                                    </button>
-                                    <p className="text-[10px] text-gray-400 font-medium px-4 leading-relaxed">By continuing, you'll receive your renders via email and be notified about special offers from Left Side Logos. No spam, ever.</p>
-                                </form>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
-        </div>
+        <MediaPicker
+            isOpen={isMediaPickerOpen}
+            onClose={() => setIsMediaPickerOpen(false)}
+            onSelect={handleMediaSelect}
+            multiple={false}
+            defaultCategory="Brand Assets"
+            title="Select Logo Artwork"
+        />
+        </>
     );
 };
