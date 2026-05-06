@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Truck, Package, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, Truck, Package, ShoppingBag, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../AuthContext';
 
@@ -18,6 +18,7 @@ type Order = {
     timeline_step: number;
     details: OrderDetail[];
     created_at: string;
+    ai_summary?: string;
 };
 
 const timelineSteps = [
@@ -174,6 +175,21 @@ export const PortalOrders: React.FC = () => {
                                         })}
                                     </div>
                                 </div>
+
+                                {/* AI Summary Button */}
+                                {order.ai_summary && (
+                                    <div className="mt-4">
+                                        <details className="group [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center gap-2 cursor-pointer bg-blue-50 text-lsl-blue px-4 py-2.5 rounded-lg border border-blue-100 font-semibold text-sm hover:bg-blue-100 transition-colors w-max">
+                                                <Sparkles className="w-4 h-4" />
+                                                View Project Summary
+                                            </summary>
+                                            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-600 leading-relaxed">
+                                                {order.ai_summary}
+                                            </div>
+                                        </details>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );

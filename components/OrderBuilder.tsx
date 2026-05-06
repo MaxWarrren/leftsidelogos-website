@@ -7,6 +7,7 @@ import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { MediaPicker, type MediaItem } from './MediaPicker';
 import type { GroupedCartItem } from '../types';
+import { GoogleGenAI } from '@google/genai';
 
 // --- Types ---
 
@@ -320,7 +321,28 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
             if (orderDraft.selectedDecorationTypes.length) descParts.push(`Decoration: ${orderDraft.selectedDecorationTypes.join(', ')}`);
             if (orderDraft.logoPlacement) descParts.push(`Placement: ${orderDraft.logoPlacement}`);
 
-            const { error } = await supabase.from('orders').insert({
+            // Generate AI Summary
+            let aiSummary = "";
+            try {
+                const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_FREE_GEMINI_API_KEY });
+                const prompt = `
+Please write a concise 2-3 sentence summary of this custom apparel order request.
+Organization: ${organization.name}
+Details:
+${descParts.join('\n')}
+Items Ordered:
+${cartBreakdown.map(g => `- ${g.totalQuantity}x ${g.product} (${g.category})`).join('\n')}
+                `;
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3.1-flash-lite-preview',
+                    contents: prompt,
+                });
+                aiSummary = response.text || "";
+            } catch (err) {
+                console.error("Failed to generate AI summary:", err);
+            }
+
+            const orderData = {
                 organization_id: organization.id,
                 name: orderName,
                 status: 'pending',
@@ -331,10 +353,50 @@ export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: (
                 source: 'website',
                 submitted_by: user?.id,
                 attachments: fileUrls,
-            });
+                ai_summary: aiSummary,
+            };
+
+            const { error } = await supabase.from('orders').insert(orderData);
 
             if (error) {
                 throw new Error(error.message);
+            }
+
+            // Webhook payload including user info
+            const webhookPayload = {
+                ...orderData,
+                organization_name: organization.name,
+                user_email: profile?.email,
+                user_name: profile?.full_name,
+            };
+
+            try {
+                const testUrl = "https://n8n.maxwellwarren.dev/webhook-test/76e4d8b0-e9eb-4dad-85e7-115c1d453a99";
+                const prodUrl = "https://n8n.maxwellwarren.dev/webhook/76e4d8b0-e9eb-4dad-85e7-115c1d453a99";
+
+                let res = await fetch(testUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(webhookPayload)
+                });
+
+                if (!res.ok) {
+                    await fetch(prodUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(webhookPayload)
+                    });
+                }
+            } catch (err) {
+                try {
+                    await fetch("https://n8n.maxwellwarren.dev/webhook/76e4d8b0-e9eb-4dad-85e7-115c1d453a99", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(webhookPayload)
+                    });
+                } catch (prodErr) {
+                    console.error("Webhook failed:", prodErr);
+                }
             }
 
             localStorage.removeItem('lsl_order_draft');
