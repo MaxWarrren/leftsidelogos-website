@@ -59,7 +59,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
 
         const channel = supabase
             .channel(`media-picker-${organization.id}`)
-            .on('postgres_changes', { event: '*', schema: 'public', filter: `organization_id=eq.${organization.id}` }, () => fetchMedia())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'media_items', filter: `organization_id=eq.${organization.id}` }, () => fetchMedia())
             .subscribe();
 
         return () => {

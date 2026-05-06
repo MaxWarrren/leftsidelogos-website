@@ -2,16 +2,21 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Building2, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
-type AuthTab = 'login' | 'signup';
+type AuthTab = 'login' | 'signup' | 'forgot_password';
 
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, closeAuthModal, signIn, signUp } = useAuth();
+  const { isAuthModalOpen, closeAuthModal, signIn, signUp, isRecoveringPassword, setIsRecoveringPassword } = useAuth();
   const [tab, setTab] = useState<AuthTab>('login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Password reset fields
+  const [resetEmail, setResetEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
 
   // Login fields
   const [loginEmail, setLoginEmail] = useState('');
@@ -30,6 +35,8 @@ export const AuthModal: React.FC = () => {
     setSignupEmail('');
     setSignupPassword('');
     setSignupOrg('');
+    setResetEmail('');
+    setNewPassword('');
     setError('');
     setSuccess('');
     setShowPassword(false);
@@ -37,6 +44,7 @@ export const AuthModal: React.FC = () => {
 
   const handleClose = () => {
     resetForm();
+    setIsRecoveringPassword(false);
     closeAuthModal();
   };
 
@@ -74,6 +82,48 @@ export const AuthModal: React.FC = () => {
       setError(result.error);
     } else if (result.needsConfirmation) {
       setSuccess('Check your email to confirm your account, then log in.');
+    }
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: window.location.origin,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setSuccess('Check your email for the password reset link.');
+    }
+    setLoading(false);
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setSuccess('Password updated successfully! You can now log in.');
+      setIsRecoveringPassword(false);
+      // Wait for success message to be seen, or just switch tab.
+      // Success view will render because success is set.
+      // When they click "Go to login", it'll handle it.
     }
     setLoading(false);
   };
@@ -129,28 +179,30 @@ export const AuthModal: React.FC = () => {
             </div>
 
             {/* Tab Switcher */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => switchTab('login')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-all ${
-                  tab === 'login'
-                    ? 'bg-white text-lsl-black shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Log In
-              </button>
-              <button
-                onClick={() => switchTab('signup')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-all ${
-                  tab === 'signup'
-                    ? 'bg-white text-lsl-black shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Sign Up
-              </button>
-            </div>
+            {!isRecoveringPassword && (
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => switchTab('login')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-all ${
+                    tab === 'login' || tab === 'forgot_password'
+                      ? 'bg-white text-lsl-black shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Log In
+                </button>
+                <button
+                  onClick={() => switchTab('signup')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-all ${
+                    tab === 'signup'
+                      ? 'bg-white text-lsl-black shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Content */}
@@ -170,6 +222,101 @@ export const AuthModal: React.FC = () => {
                   Go to Login
                 </button>
               </motion.div>
+            ) : isRecoveringPassword ? (
+              <form onSubmit={handleUpdatePassword} className="space-y-4 mt-4">
+                <h3 className="text-lg font-bold text-lsl-black mb-2">Update Password</h3>
+                <p className="text-sm text-gray-500 mb-4">Please enter your new password below.</p>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      minLength={6}
+                      className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-500 font-medium bg-red-50 rounded-lg px-3 py-2">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-lsl-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Password'
+                  )}
+                </button>
+              </form>
+            ) : tab === 'forgot_password' ? (
+              <form onSubmit={handleForgotPassword} className="space-y-4 mt-4">
+                <h3 className="text-lg font-bold text-lsl-black mb-2">Reset Password</h3>
+                <p className="text-sm text-gray-500 mb-4">Enter your email address and we'll send you a link to reset your password.</p>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      required
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-500 font-medium bg-red-50 rounded-lg px-3 py-2">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-lsl-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Reset Link'
+                  )}
+                </button>
+
+                <p className="text-center text-xs text-gray-400 mt-3">
+                  Remember your password?{' '}
+                  <button type="button" onClick={() => switchTab('login')} className="text-lsl-blue font-semibold hover:underline">
+                    Back to login
+                  </button>
+                </p>
+              </form>
             ) : tab === 'login' ? (
               <form onSubmit={handleLogin} className="space-y-4 mt-4">
                 <div className="space-y-1.5">
@@ -204,6 +351,11 @@ export const AuthModal: React.FC = () => {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <div className="flex justify-end mt-1">
+                    <button type="button" onClick={() => switchTab('forgot_password')} className="text-[11px] text-lsl-blue font-medium hover:underline">
+                      Forgot password?
                     </button>
                   </div>
                 </div>

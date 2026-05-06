@@ -28,6 +28,8 @@ interface AuthContextType {
   openAuthModal: () => void;
   closeAuthModal: () => void;
   isAuthModalOpen: boolean;
+  isRecoveringPassword: boolean;
+  setIsRecoveringPassword: (val: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [organization, setOrganization] = useState<UserOrganization | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
   // Fetch profile and org for a given user
   const fetchUserData = async (userId: string) => {
@@ -91,6 +94,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveringPassword(true);
+        setIsAuthModalOpen(true);
+      }
 
       if (newSession?.user) {
         // Small delay to let the trigger create the profile
@@ -209,6 +217,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         openAuthModal: () => setIsAuthModalOpen(true),
         closeAuthModal: () => setIsAuthModalOpen(false),
         isAuthModalOpen,
+        isRecoveringPassword,
+        setIsRecoveringPassword,
       }}
     >
       {children}

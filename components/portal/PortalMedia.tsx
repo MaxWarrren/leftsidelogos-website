@@ -85,7 +85,8 @@ export const PortalMedia: React.FC = () => {
 
         const channel = supabase
             .channel(`media-gallery-${organization.id}`)
-            .on('postgres_changes', { event: '*', schema: 'public', filter: `organization_id=eq.${organization.id}` }, () => fetchItems())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'media_items', filter: `organization_id=eq.${organization.id}` }, () => fetchItems())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts', filter: `organization_id=eq.${organization.id}` }, () => fetchItems())
             .subscribe();
 
         return () => {
