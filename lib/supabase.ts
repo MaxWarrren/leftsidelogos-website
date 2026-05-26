@@ -1,12 +1,33 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Vite HMR re-executes modules, which would create a second GoTrueClient and
+// trigger the supabase-js "Multiple GoTrueClient instances" warning. Cache the
+// instance on globalThis so HMR re-imports get the same client back.
+const globalForSupabase = globalThis as unknown as {
+  __lslSupabase?: SupabaseClient;
+};
+
+export const supabase: SupabaseClient =
+  globalForSupabase.__lslSupabase ??
+  (globalForSupabase.__lslSupabase = createClient(supabaseUrl, supabaseAnonKey));
+
+// Per-session circuit breaker for catalog reads. supabase-js retries each
+// request several times with OPTIONS + GET; if the project is unreachable
+// (DNS failure / paused project / wrong env), that's 6+ console errors per
+// route change. Once we've seen it fail once, fall straight back to the
+// local catalog for the rest of the session.
+let catalogFetchDisabled = false;
 
 // Fetch all published products with their category name
+// `image_variants`, `print_areas`, and `base_color` are optional new columns
+// (see migrations/20260523_catalog_customizer_fields.sql). The select pulls
+// them with safe fallbacks if the columns don't exist yet.
 export async function getAllProducts() {
+  if (catalogFetchDisabled) return [];
+
   const { data, error } = await supabase
     .from('catalog_products')
     .select(`
@@ -21,21 +42,44 @@ export async function getAllProducts() {
       sizes,
       base_price,
       featured,
+      image_variants,
+      print_areas,
+      base_color,
       catalog_categories ( name )
     `)
     .eq('published', true)
     .order('name');
 
   if (error) {
+    // Retry without the new columns so we keep working before the migration is applied.
+    if (/image_variants|print_areas|base_color/.test(error.message)) {
+      const { data: legacy, error: legacyError } = await supabase
+        .from('catalog_products')
+        .select(`
+          id, name, slug, category_id, sku, description, images, colors, sizes,
+          base_price, featured, catalog_categories ( name )
+        `)
+        .eq('published', true)
+        .order('name');
+      if (legacyError) {
+        console.error('Failed to fetch products:', legacyError);
+        return [];
+      }
+      return (legacy || []).map(flattenCategory);
+    }
     console.error('Failed to fetch products:', error);
+    catalogFetchDisabled = true;
     return [];
   }
 
-  // Flatten category name from the join
-  return (data || []).map((p: any) => ({
+  return (data || []).map(flattenCategory);
+}
+
+function flattenCategory(p: any) {
+  return {
     ...p,
     category: p.catalog_categories?.name || 'Uncategorized',
-  }));
+  };
 }
 
 // Fetch all categories

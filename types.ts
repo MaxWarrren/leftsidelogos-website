@@ -42,6 +42,37 @@ export interface CatalogProduct {
   sizes: string[];
   base_price: number;
   featured?: boolean;
+  // Phase A — Customizer metadata (optional; falls back to `images[0]` + a default centered print area)
+  image_variants?: ProductImageVariants;
+  print_areas?: ProductPrintAreas;
+  base_color?: string; // canonical "natural" color of the source PNG, used as the tint baseline
+}
+
+/**
+ * Per-angle, per-color image library.
+ * Color keys should be lowercased/slugified versions of the strings in `colors`.
+ * If a (view, color) pair is missing, the Studio falls back to the base image + a color tint filter.
+ */
+export type ProductImageVariants = Record<string, Record<string, string>>;
+
+/**
+ * Normalized 0-1 rectangle defining the printable region for each angle.
+ * x/y are top-left; width/height are fractions of the stage size.
+ */
+export type ProductPrintAreas = Record<
+  string,
+  { x: number; y: number; width: number; height: number }
+>;
+
+export interface MockupPlacement {
+  id: string;
+  imageDataUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
 }
 
 export interface CatalogCategory {

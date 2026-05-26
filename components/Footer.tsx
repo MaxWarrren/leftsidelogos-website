@@ -1,86 +1,214 @@
 import React from 'react';
-import { Facebook, Mail, Phone, MapPin, Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Facebook, Mail, MapPin, Phone } from 'lucide-react';
+
+const columnVariants = {
+  hidden: { opacity: 0, y: 16 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: 0.06 * i, duration: 0.42, ease: [0.16, 1, 0.3, 1] },
+  }),
+};
 
 export const Footer: React.FC = () => {
   return (
-    <footer id="contact" className="bg-[#0c0c0d] text-gray-500 py-24 border-t border-white/5 relative overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none translate-x-1/2 translate-y-1/2"></div>
+    <footer
+      id="contact"
+      className="relative isolate overflow-hidden bg-lsl-ink text-lsl-cream/80"
+    >
+      <StitchPattern />
 
-      <div className="container mx-auto px-4 relative z-10">
-        <div className="grid md:grid-cols-3 gap-16 mb-20">
+      <div className="absolute right-[-20%] bottom-[-20%] -z-10 h-[600px] w-[600px] rounded-full bg-lsl-navy/30 blur-[140px]" />
 
-          {/* Logo & Intro */}
-          <div className="space-y-8">
-            <div className="flex items-center gap-3 font-display font-bold text-2xl tracking-tighter text-white">
+      <div className="relative mx-auto max-w-7xl px-6 pt-24 pb-12 md:px-10 md:pt-32">
+        <div className="grid gap-14 md:grid-cols-12 md:gap-10">
+          <motion.div
+            custom={0}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={columnVariants}
+            className="md:col-span-5"
+          >
+            <div className="flex items-center gap-3">
               <img
                 src="/LSL_Logo.png"
-                alt="Left Side Logos"
-                className="h-10 w-auto object-contain brightness-200 contrast-125"
+                alt=""
+                className="h-10 w-auto object-contain brightness-0 invert"
               />
-              <span>Left Side Logos</span>
+              <span className="font-display text-2xl font-semibold tracking-tight text-lsl-cream">
+                Left Side Logos
+              </span>
             </div>
-            <p className="text-sm leading-relaxed max-w-sm font-light">
-              We bring brands to life through premium embroidery and silk-screen printing. Quality Missouri craftsmanship, delivered with dependable precision since 2023.
+            <p className="mt-6 max-w-md text-sm leading-relaxed text-lsl-cream/75">
+              Premium embroidery, screen printing, and full-service custom merch — made in Missouri, delivered to your team.
             </p>
-            <div className="flex gap-4">
-              <a href="#" className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center hover:bg-lsl-blue hover:text-white transition-all border border-white/5">
-                <Facebook size={20} />
-              </a>
-              <a href="mailto:leftsidelogos@gmail.com" className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center hover:bg-lsl-blue hover:text-white transition-all border border-white/5">
-                <Mail size={20} />
-              </a>
-            </div>
-          </div>
 
-          {/* Location & Contact */}
-          <div className="space-y-8">
-            <div>
-              <h4 className="text-white font-bold text-xs uppercase tracking-[0.2em] mb-6">HQ Location</h4>
-              <div className="flex items-start gap-4">
-                <MapPin size={18} className="mt-1 text-lsl-blue opacity-50" />
-                <span className="text-sm">29 West Industrial Dr.<br />O’fallon, MO 63366</span>
-              </div>
+            <div className="mt-8 flex gap-3">
+              <SocialLink
+                href="https://facebook.com/leftsidelogos"
+                label="Facebook"
+              >
+                <Facebook className="h-4 w-4" strokeWidth={1.75} />
+              </SocialLink>
+              <SocialLink
+                href="mailto:leftsidelogos@gmail.com"
+                label="Email Left Side Logos"
+              >
+                <Mail className="h-4 w-4" strokeWidth={1.75} />
+              </SocialLink>
             </div>
-            <div>
-              <h4 className="text-white font-bold text-xs uppercase tracking-[0.2em] mb-6">Direct Line</h4>
-              <div className="flex items-center gap-4">
-                <Phone size={18} className="text-lsl-blue opacity-50" />
-                <span className="text-sm">314-583-5431</span>
-              </div>
-            </div>
-          </div>
+          </motion.div>
 
-          {/* Service Hours */}
-          <div className="space-y-8">
-            <h4 className="text-white font-bold text-xs uppercase tracking-[0.2em] mb-6">Service Hours</h4>
-            <ul className="space-y-3 text-sm font-light">
-              <li className="flex items-center justify-between border-b border-white/5 pb-2">
-                <span>Monday - Friday</span>
-                <span className="text-white font-medium">9:00 - 4:30</span>
-              </li>
-              <li className="flex items-center justify-between border-b border-white/5 pb-2">
-                <span>Saturday</span>
-                <span className="text-gray-600">Closed</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span>Sunday</span>
-                <span className="text-gray-600">Closed</span>
-              </li>
+          <motion.div
+            custom={1}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={columnVariants}
+            className="md:col-span-3"
+          >
+            <h4 className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
+              Workshop
+            </h4>
+            <div className="mt-5 space-y-4 text-sm">
+              <a
+                href="https://maps.google.com/?q=29+West+Industrial+Dr,+O%27Fallon,+MO+63366"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-start gap-3 text-lsl-cream/80 transition-colors hover:text-lsl-cream"
+              >
+                <MapPin
+                  className="mt-0.5 h-4 w-4 flex-shrink-0 text-lsl-thread"
+                  strokeWidth={1.75}
+                />
+                <span className="leading-snug">
+                  29 West Industrial Dr.
+                  <br />
+                  O&apos;Fallon, MO 63366
+                </span>
+              </a>
+              <a
+                href="tel:+13145835431"
+                className="flex items-center gap-3 text-lsl-cream/80 transition-colors hover:text-lsl-cream"
+              >
+                <Phone
+                  className="h-4 w-4 text-lsl-thread"
+                  strokeWidth={1.75}
+                />
+                <span className="font-mono tabular-nums">314-583-5431</span>
+              </a>
+            </div>
+          </motion.div>
+
+          <motion.div
+            custom={2}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={columnVariants}
+            className="md:col-span-4"
+          >
+            <h4 className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
+              Hours
+            </h4>
+            <ul className="mt-5 space-y-2 text-sm">
+              <HoursRow day="Monday – Friday" hours="9:00 – 4:30" />
+              <HoursRow day="Saturday" hours="Closed" muted />
+              <HoursRow day="Sunday" hours="Closed" muted />
             </ul>
-          </div>
-
+          </motion.div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="border-t border-white/5 pt-12 flex flex-col md:flex-row items-center justify-between gap-6 text-[11px] font-bold uppercase tracking-[0.2em]">
-          <p className="text-gray-700">&copy; {new Date().getFullYear()} Left Side Logos. Missouri Born & Raised.</p>
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="mt-20 flex flex-col items-center justify-between gap-4 border-t border-lsl-cream/10 pt-8 text-[11px] uppercase tracking-[0.22em] text-lsl-cream/50 md:flex-row"
+        >
+          <p>
+            © {new Date().getFullYear()} Left Side Logos · Missouri Born &amp; Raised
+          </p>
           <div className="flex gap-8">
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+            <a
+              href="#"
+              className="transition-colors hover:text-lsl-cream"
+            >
+              Privacy
+            </a>
+            <a
+              href="#"
+              className="transition-colors hover:text-lsl-cream"
+            >
+              Terms
+            </a>
           </div>
-        </div>
+        </motion.div>
       </div>
     </footer>
   );
 };
+
+function HoursRow({
+  day,
+  hours,
+  muted = false,
+}: {
+  day: string;
+  hours: string;
+  muted?: boolean;
+}) {
+  return (
+    <li className="flex items-baseline justify-between gap-4 border-b border-lsl-cream/10 pb-2">
+      <span className="text-lsl-cream/75">{day}</span>
+      <span
+        className={
+          muted
+            ? 'font-mono text-xs text-lsl-cream/40'
+            : 'font-mono text-xs tabular-nums text-lsl-cream'
+        }
+      >
+        {hours}
+      </span>
+    </li>
+  );
+}
+
+function SocialLink({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      aria-label={label}
+      target={href.startsWith('http') ? '_blank' : undefined}
+      rel={href.startsWith('http') ? 'noreferrer' : undefined}
+      className="grid h-10 w-10 place-items-center rounded-full border border-lsl-cream/15 bg-white/[0.03] text-lsl-cream/80 transition-all hover:-translate-y-0.5 hover:border-lsl-thread/60 hover:bg-lsl-thread/10 hover:text-lsl-thread"
+    >
+      {children}
+    </a>
+  );
+}
+
+// Diagonal stitch / weave SVG, very low opacity — adds tactile depth to the footer.
+function StitchPattern() {
+  return (
+    <div
+      aria-hidden="true"
+      className="absolute inset-0 -z-10 opacity-[0.05]"
+      style={{
+        backgroundImage:
+          'repeating-linear-gradient(45deg, #F7F4EE 0 1px, transparent 1px 14px), repeating-linear-gradient(-45deg, #F7F4EE 0 1px, transparent 1px 14px)',
+        backgroundSize: '28px 28px',
+      }}
+    />
+  );
+}

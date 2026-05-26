@@ -5,15 +5,18 @@ import { Services } from './components/Services';
 import { About } from './components/About';
 import { Footer } from './components/Footer';
 
-import { MockupGenerator } from './components/MockupGenerator';
+import { MockupStudio } from './components/MockupStudio';
 import { ContactPage } from './components/ContactPage';
 import { BuildOrderPage } from './components/BuildOrderPage';
 import { CatalogPage } from './components/CatalogPage';
 import { BottomCTA } from './components/BottomCTA';
 import { CartProvider } from './components/CartContext';
+import { CartDrawerProvider } from './components/CartDrawer';
 import { AuthProvider } from './components/AuthContext';
 import { CustomerPortal } from './components/portal/CustomerPortal';
 import { AuthModal } from './components/AuthModal';
+import { MotionProvider } from './components/ui/motion-provider';
+import { Toaster } from './components/ui/toaster';
 import type { CatalogProduct } from './types';
 
 type Page = 'home' | 'mockup' | 'contact' | 'build-order' | 'catalog' | 'portal';
@@ -37,9 +40,11 @@ function App() {
   };
 
   return (
-    <AuthProvider>
-      <CartProvider>
-        <div className="min-h-screen bg-[#f4f4f5] font-sans text-lsl-black selection:bg-lsl-blue selection:text-white flex flex-col">
+    <MotionProvider>
+      <AuthProvider>
+        <CartProvider>
+          <CartDrawerProvider onCheckout={() => navigateTo('build-order')}>
+          <div className="min-h-screen bg-lsl-cream font-sans text-lsl-ink selection:bg-lsl-navy selection:text-lsl-cream flex flex-col">
           <Navbar
             currentPage={currentPage}
             setCurrentPage={navigateTo}
@@ -57,8 +62,8 @@ function App() {
             )}
 
             {currentPage === 'mockup' && (
-              <MockupGenerator
-                onSwitchToQuote={() => navigateTo('build-order')}
+              <MockupStudio
+                onSwitchToQuote={() => navigateTo('catalog')}
                 product={selectedProductForMockup}
                 onNavigateToBuildOrder={() => navigateTo('build-order')}
               />
@@ -83,10 +88,13 @@ function App() {
               <CustomerPortal />
             )}
           </main>
-          {currentPage !== 'portal' && <Footer />}
-        </div>
-      </CartProvider>
-    </AuthProvider>
+            {currentPage !== 'portal' && <Footer />}
+          </div>
+          </CartDrawerProvider>
+          <Toaster />
+        </CartProvider>
+      </AuthProvider>
+    </MotionProvider>
   );
 }
 

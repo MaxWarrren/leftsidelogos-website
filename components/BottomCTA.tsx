@@ -2,42 +2,82 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 
+import { Button } from './ui/button';
+
 interface BottomCTAProps {
   onStartDesigning: () => void;
 }
 
 export const BottomCTA: React.FC<BottomCTAProps> = ({ onStartDesigning }) => {
   return (
-    <section className="py-32 bg-white relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute inset-0 pointer-events-none opacity-40">
-         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-50 rounded-full blur-[100px] transform translate-x-1/2 -translate-y-1/2"></div>
-         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gray-100 rounded-full blur-[80px] transform -translate-x-1/3 translate-y-1/3"></div>
+    <section className="relative isolate overflow-hidden bg-lsl-navy text-lsl-cream">
+      <StitchOverlay />
+
+      {/* Reserved slot for the Remotion `cta-stitch.mp4` background loop (Step 7). */}
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-30">
+        <div className="absolute -left-20 top-10 h-72 w-72 rounded-full bg-lsl-thread/20 blur-[140px]" />
+        <div className="absolute -right-20 bottom-10 h-80 w-80 rounded-full bg-lsl-cream/10 blur-[160px]" />
       </div>
 
-      <div className="container mx-auto px-4 relative z-10 text-center">
+      <div className="mx-auto max-w-6xl px-6 py-24 md:px-10 md:py-32">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+          className="grid items-end gap-12 md:grid-cols-12"
         >
-          <h2 className="text-5xl md:text-7xl font-display font-bold text-lsl-black mb-6 leading-tight">
-            Ready to Wear <br/> Your Brand?
-          </h2>
-          <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed font-light">
-            Stop imagining and start creating. Use our AI-powered design studio to build your custom order and visualize your logo on premium apparel in seconds.
-          </p>
-          
-          <button
-            onClick={onStartDesigning}
-            className="group relative inline-flex items-center gap-3 px-10 py-5 bg-lsl-blue text-white rounded-full font-bold text-lg shadow-xl hover:shadow-2xl hover:bg-lsl-black hover:scale-105 transition-all duration-300"
-          >
-            <span>Launch Design Studio</span>
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+          <div className="md:col-span-8">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-thread">
+              Ready when you are
+            </p>
+            <h2 className="mt-4 font-display text-4xl font-semibold leading-[1.02] tracking-[-0.02em] md:text-6xl lg:text-[4.5rem]">
+              Let&apos;s put your
+              <br />
+              brand on something{' '}
+              <span className="text-lsl-thread">real.</span>
+            </h2>
+            <p className="mt-6 max-w-xl text-base leading-relaxed text-lsl-cream/75 md:text-lg">
+              Start a project in minutes. Add the products you want, drop in your logo, and we&apos;ll come back with a proof and a quote — usually same day.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 md:col-span-4 md:items-end">
+            <Button
+              variant="primary"
+              size="xl"
+              onClick={onStartDesigning}
+              className="group w-full bg-lsl-cream text-lsl-ink hover:bg-lsl-cream hover:brightness-95 md:w-auto"
+            >
+              Start your project
+              <ArrowRight
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                strokeWidth={2}
+              />
+            </Button>
+            <a
+              href="#about"
+              className="text-sm font-medium text-lsl-cream/65 underline-offset-4 transition-colors hover:text-lsl-cream hover:underline"
+            >
+              Or learn more about us
+            </a>
+          </div>
         </motion.div>
       </div>
     </section>
   );
 };
+
+function StitchOverlay() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 -z-10 opacity-[0.06]"
+      style={{
+        backgroundImage:
+          'repeating-linear-gradient(45deg, #F7F4EE 0 1px, transparent 1px 18px), repeating-linear-gradient(-45deg, #F7F4EE 0 1px, transparent 1px 18px)',
+        backgroundSize: '36px 36px',
+      }}
+    />
+  );
+}

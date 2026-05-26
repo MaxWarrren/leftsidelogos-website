@@ -1,57 +1,64 @@
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
 
-import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { cva, type VariantProps } from "class-variance-authority"
-
-import { cn } from "../../lib/utils"
+import { cn } from '../../lib/utils';
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium tracking-tight transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lsl-navy/40 focus-visible:ring-offset-2 focus-visible:ring-offset-lsl-cream disabled:cursor-not-allowed disabled:bg-lsl-stone disabled:text-lsl-graphite/60 disabled:shadow-none',
   {
     variants: {
       variant: {
-        default: "bg-lsl-black text-white hover:bg-lsl-black/90",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        primary:
+          'bg-lsl-navy text-lsl-cream shadow-lsl-card hover:bg-lsl-navy-700 hover:shadow-lsl-lift active:scale-[0.98]',
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          'border border-lsl-ink/90 bg-transparent text-lsl-ink hover:bg-lsl-ink hover:text-lsl-cream active:scale-[0.98]',
+        ghost:
+          'bg-transparent text-lsl-ink underline-offset-4 hover:underline',
+        outline:
+          'border border-lsl-stone bg-white text-lsl-ink hover:border-lsl-ink hover:shadow-lsl-card',
+        destructive:
+          'bg-red-600 text-white hover:bg-red-700 active:scale-[0.98]',
+        link:
+          'h-auto p-0 text-lsl-navy underline-offset-4 hover:underline',
+        // Legacy alias used by older components; keep until they are refactored.
+        default:
+          'bg-lsl-ink text-lsl-cream hover:bg-lsl-ink/90 active:scale-[0.98]',
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        sm: 'h-9 px-3 text-xs',
+        md: 'h-11 px-5',
+        lg: 'h-12 px-6 text-base',
+        xl: 'h-14 px-8 text-base',
+        icon: 'h-11 w-11',
+        // Legacy alias kept for backward compatibility.
+        default: 'h-11 px-5',
       },
     },
     defaultVariants: {
-      variant: "default",
-      size: "default",
+      variant: 'primary',
+      size: 'md',
     },
   },
-)
+);
 
-// Use type intersection instead of interface to fix inference issues with forwardRef
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }
+    asChild?: boolean;
+  };
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
+    const Comp = asChild ? Slot : 'button';
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
       />
-    )
+    );
   },
-)
-Button.displayName = "Button"
+);
+Button.displayName = 'Button';
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };

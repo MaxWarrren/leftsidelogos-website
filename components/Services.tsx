@@ -1,188 +1,372 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointerClick, MessageSquare, PenTool, FileCheck, PackageCheck, Flame, Printer, Scissors, Layers, Box, Package } from 'lucide-react';
+import {
+  Box,
+  FileCheck,
+  Flame,
+  Layers,
+  MessageSquare,
+  MousePointerClick,
+  Package,
+  PackageCheck,
+  PenTool,
+  Printer,
+  Scissors,
+} from 'lucide-react';
 
-const services = [
+import { cn } from '../lib/utils';
+
+type Service = {
+  icon: typeof Flame;
+  title: string;
+  desc: string;
+  tag?: string;
+};
+
+const featuredService: Service = {
+  icon: Scissors,
+  title: 'Embroidery',
+  desc: 'Premium thread on polos, hats, and outerwear. Digitized in-house so the stitch sits exactly where it should — sharp logos, no puckering, no excuses.',
+  tag: 'Signature service',
+};
+
+const services: Service[] = [
   {
     icon: Flame,
-    title: "Heat Transfer",
-    desc: "Durable vinyl transfers pressed onto garments for bold, vibrant graphics that last wash after wash.",
-    color: "from-orange-500 to-red-500",
-    bgColor: "bg-orange-50",
-    iconColor: "text-orange-600",
+    title: 'Heat transfer',
+    desc: 'Bold, washable vinyl graphics pressed onto garments.',
   },
   {
     icon: Printer,
-    title: "Direct to Film",
-    desc: "Full-color prints with incredible detail and durability. Perfect for complex designs and photographic artwork.",
-    color: "from-cyan-500 to-blue-500",
-    bgColor: "bg-cyan-50",
-    iconColor: "text-cyan-600",
-  },
-  {
-    icon: Scissors,
-    title: "Embroidery",
-    desc: "Classic thread stitching for a premium, textured finish. Ideal for polos, hats, and professional wear.",
-    color: "from-lsl-blue to-blue-700",
-    bgColor: "bg-blue-50",
-    iconColor: "text-lsl-blue",
+    title: 'Direct to film',
+    desc: 'Photographic detail and full color, even on dark fabrics.',
   },
   {
     icon: Layers,
-    title: "Leather Patches",
-    desc: "Laser-engraved genuine leather patches for an elevated, rugged aesthetic on hats and outerwear.",
-    color: "from-amber-700 to-amber-900",
-    bgColor: "bg-amber-50",
-    iconColor: "text-amber-700",
+    title: 'Leather patches',
+    desc: 'Laser-engraved leather on hats and outerwear for a heritage feel.',
   },
   {
     icon: Box,
-    title: "Acrylic Patches",
-    desc: "Modern, dimensional patches with a sleek look. Combine materials and finishes for unique branding.",
-    color: "from-purple-500 to-indigo-600",
-    bgColor: "bg-purple-50",
-    iconColor: "text-purple-600",
+    title: 'Acrylic patches',
+    desc: 'Dimensional, modern branding with clean edges and a sleek finish.',
   },
   {
     icon: Package,
-    title: "Fulfillment",
-    desc: "We handle packing and shipping directly to your team, customers, or event. Hands-off from order to doorstep.",
-    color: "from-emerald-500 to-teal-600",
-    bgColor: "bg-emerald-50",
-    iconColor: "text-emerald-600",
+    title: 'Fulfillment',
+    desc: 'We pack and ship straight to your team, customers, or event.',
   },
 ];
 
-const timelineSteps = [
+type Step = {
+  id: number;
+  title: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+};
+
+const timelineSteps: Step[] = [
   {
     id: 1,
-    title: "Build Order",
-    desc: "Use our Design Studio to build your quote & get an AI Mockup instantly.",
-    icon: <MousePointerClick className="w-6 h-6 text-white" />
+    title: 'Build order',
+    desc: 'Use the Order Builder to put your project together and (optionally) preview your logo in the Mockup Studio.',
+    icon: MousePointerClick,
   },
   {
     id: 2,
-    title: "Onboarding",
-    desc: "Connect with our design team to discuss your brand vision & needs.",
-    icon: <MessageSquare className="w-6 h-6 text-white" />
+    title: 'Onboarding',
+    desc: 'A quick call to lock in brand direction, file formats, and timeline expectations.',
+    icon: MessageSquare,
   },
   {
     id: 3,
-    title: "Design",
-    desc: "We refine artwork and specifications. You approve every detail.",
-    icon: <PenTool className="w-6 h-6 text-white" />
+    title: 'Design',
+    desc: 'We refine artwork and stitch files. You approve every detail before anything goes to production.',
+    icon: PenTool,
   },
   {
     id: 4,
-    title: "Invoice",
-    desc: "Finalize order quantities and process secure payment.",
-    icon: <FileCheck className="w-6 h-6 text-white" />
+    title: 'Invoice',
+    desc: 'Final quantities locked, secure payment, and your slot reserved on the production schedule.',
+    icon: FileCheck,
   },
   {
     id: 5,
-    title: "Production",
-    desc: "Production begins. Average turnaround is 2-3 weeks.",
-    icon: <PackageCheck className="w-6 h-6 text-white" />
-  }
+    title: 'Production',
+    desc: 'In-house production begins. Average turnaround is 2–3 weeks; rush available on most jobs.',
+    icon: PackageCheck,
+  },
 ];
 
 export const Services: React.FC = () => {
-  const [activeStep, setActiveStep] = useState<number | null>(null);
-
   return (
-    <section id="services" className="py-24 bg-[#f4f4f5] relative overflow-hidden">
-      <div className="container mx-auto px-4">
+    <section
+      id="services"
+      className="relative overflow-hidden bg-lsl-cream py-24 md:py-32"
+    >
+      <PaperTexture />
 
-        {/* Header */}
-        <div className="text-center mb-16">
-          <span className="text-lsl-blue font-bold tracking-[0.2em] uppercase text-xs">What We Do</span>
-          <h2 className="text-4xl md:text-5xl font-display font-bold text-lsl-black mt-3 mb-4">Our Capabilities</h2>
-          <p className="text-gray-400 text-lg font-light max-w-xl mx-auto">Everything you need to bring your brand to life — all handled in-house.</p>
-        </div>
+      <div className="relative mx-auto max-w-7xl px-6 md:px-10">
+        <SectionHeader
+          eyebrow="What we do"
+          title={
+            <>
+              Every method,
+              <br className="hidden md:block" />{' '}
+              <span className="text-lsl-graphite">under one roof.</span>
+            </>
+          }
+          intro="Six in-house production methods. One project manager. Zero ‘we’ll get back to you’."
+        />
 
-        {/* Static Services Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-5xl mx-auto mb-32">
-          {services.map((service, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.4, delay: index * 0.08 }}
-              className="group bg-white rounded-2xl border border-gray-100 p-7 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
-            >
-              <div className={`w-12 h-12 rounded-xl ${service.bgColor} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform`}>
-                <service.icon className={`w-6 h-6 ${service.iconColor}`} />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">{service.title}</h3>
-              <p className="text-sm text-gray-400 leading-relaxed">{service.desc}</p>
-            </motion.div>
+        <div className="mt-16 grid gap-5 md:grid-cols-6">
+          <FeaturedCard service={featuredService} />
+          {services.map((service) => (
+            <ServiceCard key={service.title} service={service} />
           ))}
         </div>
 
-        {/* --- Process Timeline --- */}
-        <div className="max-w-6xl mx-auto pt-12 pb-24 md:pb-32">
-          <div className="text-center mb-16">
-            <span className="text-lsl-blue font-bold tracking-[0.2em] uppercase text-xs">How It Works</span>
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-lsl-black mt-3">The Production Process</h2>
-          </div>
-
-          <div className="relative">
-            {/* Horizontal Line */}
-            <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 hidden md:block rounded-full"></div>
-
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-12 relative z-10">
-              {timelineSteps.map((step) => (
-                <div
-                  key={step.id}
-                  className="relative flex flex-col items-center group"
-                  onMouseEnter={() => setActiveStep(step.id)}
-                  onMouseLeave={() => setActiveStep(null)}
-                >
-                  {/* Dot / Icon Container */}
-                  <motion.div
-                    className={`w-16 h-16 rounded-full flex items-center justify-center border-4 transition-all duration-300 z-20 cursor-pointer
-                                    ${activeStep === step.id
-                        ? 'bg-lsl-blue border-lsl-blue shadow-lg scale-110'
-                        : 'bg-lsl-black border-white shadow-md'
-                      }`}
-                    whileHover={{ scale: 1.1 }}
-                  >
-                    {step.icon}
-                  </motion.div>
-
-                  {/* Label */}
-                  <div className="mt-4 text-center">
-                    <h4 className={`font-bold text-lg transition-colors ${activeStep === step.id ? 'text-lsl-blue' : 'text-gray-800'}`}>
-                      {step.title}
-                    </h4>
-                  </div>
-
-                  {/* Pop-up Detail Card */}
-                  <motion.div
-                    className="absolute top-24 w-64 bg-white p-6 rounded-xl shadow-2xl border border-gray-100 z-30 pointer-events-none md:pointer-events-auto"
-                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                    animate={{
-                      opacity: activeStep === step.id ? 1 : 0,
-                      y: activeStep === step.id ? 0 : 10,
-                      scale: activeStep === step.id ? 1 : 0.9
-                    }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {/* Triangle Arrow */}
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white transform rotate-45 border-t border-l border-gray-100"></div>
-
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Step 0{step.id}</span>
-                    <p className="text-sm text-gray-600 leading-relaxed font-light">
-                      {step.desc}
-                    </p>
-                  </motion.div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <ProcessSection />
       </div>
     </section>
   );
 };
+
+function FeaturedCard({ service }: { service: Service }) {
+  const Icon = service.icon;
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className="group relative isolate flex min-h-[320px] flex-col justify-between overflow-hidden rounded-3xl border border-lsl-stone bg-lsl-ink p-8 text-lsl-cream shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lsl-lift md:col-span-3 md:row-span-2 md:p-10"
+    >
+      <div className="pointer-events-none absolute -right-12 -top-10 -z-10 h-72 w-72 rounded-full bg-lsl-thread/25 blur-[110px]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.08]"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(135deg, #F7F4EE 0 1px, transparent 1px 16px)',
+        }}
+      />
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-lsl-cream/15 bg-lsl-cream/5 text-lsl-thread">
+          <Icon className="h-6 w-6" strokeWidth={1.5} />
+        </div>
+        {service.tag && (
+          <span className="rounded-full border border-lsl-thread/40 bg-lsl-thread/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-thread">
+            {service.tag}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-12">
+        <h3 className="font-display text-3xl font-semibold leading-tight text-lsl-cream md:text-4xl">
+          {service.title}
+        </h3>
+        <p className="mt-3 max-w-[40ch] text-sm leading-relaxed text-lsl-cream/75 md:text-base">
+          {service.desc}
+        </p>
+      </div>
+    </motion.article>
+  );
+}
+
+function ServiceCard({ service }: { service: Service }) {
+  const Icon = service.icon;
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      className="group relative flex flex-col rounded-2xl border border-lsl-stone bg-white p-6 shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift md:col-span-3 lg:col-span-3"
+    >
+      <div className="grid h-10 w-10 place-items-center rounded-xl bg-lsl-navy/8 text-lsl-navy">
+        <Icon className="h-5 w-5" strokeWidth={1.5} />
+      </div>
+      <h3 className="mt-5 font-display text-xl font-semibold leading-tight text-lsl-ink">
+        {service.title}
+      </h3>
+      <p className="mt-2 text-sm leading-relaxed text-lsl-graphite">
+        {service.desc}
+      </p>
+    </motion.article>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  intro,
+}: {
+  eyebrow: string;
+  title: React.ReactNode;
+  intro: string;
+}) {
+  return (
+    <div className="max-w-3xl">
+      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+        {eyebrow}
+      </p>
+      <h2 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl lg:text-[3.5rem]">
+        {title}
+      </h2>
+      <p className="mt-5 max-w-xl text-base leading-relaxed text-lsl-graphite md:text-lg">
+        {intro}
+      </p>
+    </div>
+  );
+}
+
+function ProcessSection() {
+  return (
+    <div className="mt-32 md:mt-40">
+      <SectionHeader
+        eyebrow="How it works"
+        title={
+          <>
+            From inquiry to{' '}
+            <span className="text-lsl-graphite">finished box.</span>
+          </>
+        }
+        intro="A predictable five-step process — no mystery, no surprise upcharges."
+      />
+
+      {/* Mobile / tablet: vertical accordion with always-visible details. */}
+      <ol className="mt-12 space-y-4 md:hidden">
+        {timelineSteps.map((step) => (
+          <MobileStep key={step.id} step={step} />
+        ))}
+      </ol>
+
+      {/* Desktop: horizontal stepper, also keyboard accessible. */}
+      <DesktopTimeline steps={timelineSteps} />
+    </div>
+  );
+}
+
+function MobileStep({ step }: { step: Step }) {
+  const Icon = step.icon;
+  return (
+    <li className="flex gap-4 rounded-2xl border border-lsl-stone bg-white p-5 shadow-lsl-card">
+      <div className="flex flex-col items-center">
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-lsl-navy text-lsl-cream">
+          <Icon className="h-5 w-5" strokeWidth={1.5} />
+        </div>
+        <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite tabular-nums">
+          Step 0{step.id}
+        </span>
+      </div>
+      <div className="flex-1">
+        <h4 className="font-display text-lg font-semibold text-lsl-ink">
+          {step.title}
+        </h4>
+        <p className="mt-1 text-sm leading-relaxed text-lsl-graphite">
+          {step.desc}
+        </p>
+      </div>
+    </li>
+  );
+}
+
+function DesktopTimeline({ steps }: { steps: Step[] }) {
+  const [activeId, setActiveId] = useState<number>(1);
+
+  return (
+    <div className="relative mt-16 hidden md:block">
+      <div className="absolute left-0 right-0 top-7 h-px bg-lsl-stone" />
+      <div
+        className="absolute left-0 top-7 h-px bg-lsl-navy transition-all duration-300"
+        style={{
+          width: `${((activeId - 1) / (steps.length - 1)) * 100}%`,
+        }}
+      />
+
+      <ol
+        className="relative grid grid-cols-5 gap-6"
+        role="tablist"
+        aria-label="Production process steps"
+      >
+        {steps.map((step) => {
+          const Icon = step.icon;
+          const active = activeId === step.id;
+          return (
+            <li key={step.id} className="flex flex-col items-center text-center">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls={`step-panel-${step.id}`}
+                onMouseEnter={() => setActiveId(step.id)}
+                onFocus={() => setActiveId(step.id)}
+                onClick={() => setActiveId(step.id)}
+                className={cn(
+                  'group relative grid h-14 w-14 place-items-center rounded-full border-2 transition-all duration-300',
+                  active
+                    ? 'border-lsl-navy bg-lsl-navy text-lsl-cream shadow-lsl-lift'
+                    : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-navy/40',
+                )}
+              >
+                <Icon className="h-5 w-5" strokeWidth={1.75} />
+                <span className="sr-only">{step.title}</span>
+              </button>
+              <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.2em] tabular-nums text-lsl-graphite">
+                Step 0{step.id}
+              </p>
+              <h4
+                className={cn(
+                  'mt-1 font-display text-base font-semibold transition-colors',
+                  active ? 'text-lsl-ink' : 'text-lsl-graphite',
+                )}
+              >
+                {step.title}
+              </h4>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="mt-10 min-h-[120px] rounded-2xl border border-lsl-stone bg-white p-8 shadow-lsl-card">
+        {steps.map((step) => (
+          <div
+            key={step.id}
+            id={`step-panel-${step.id}`}
+            role="tabpanel"
+            hidden={activeId !== step.id}
+          >
+            {activeId === step.id && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+              >
+                <p className="font-display text-2xl font-semibold text-lsl-ink">
+                  {step.title}
+                </p>
+                <p className="mt-2 max-w-2xl text-base leading-relaxed text-lsl-graphite">
+                  {step.desc}
+                </p>
+              </motion.div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaperTexture() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 opacity-[0.04]"
+      style={{
+        backgroundImage:
+          'radial-gradient(#0B0B0E 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
+      }}
+    />
+  );
+}

@@ -1,32 +1,52 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Building2, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Building2,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Mail,
+  User,
+  X,
+} from 'lucide-react';
+
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
 
 type AuthTab = 'login' | 'signup' | 'forgot_password';
 
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, closeAuthModal, signIn, signUp, isRecoveringPassword, setIsRecoveringPassword } = useAuth();
+  const {
+    isAuthModalOpen,
+    closeAuthModal,
+    signIn,
+    signUp,
+    isRecoveringPassword,
+    setIsRecoveringPassword,
+  } = useAuth();
+
   const [tab, setTab] = useState<AuthTab>('login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Password reset fields
   const [resetEmail, setResetEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-
-  // Login fields
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-
-  // Signup fields
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupOrg, setSignupOrg] = useState('');
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setLoginEmail('');
@@ -48,15 +68,35 @@ export const AuthModal: React.FC = () => {
     closeAuthModal();
   };
 
+  // Lock body scroll, trap ESC, autofocus first field.
+  useEffect(() => {
+    if (!isAuthModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+      if (e.key === 'Tab' && modalRef.current) {
+        trapFocus(e, modalRef.current);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const t = setTimeout(() => firstFieldRef.current?.focus(), 80);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthModalOpen, tab, isRecoveringPassword]);
+
+  // ─── Submit handlers ───
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     const result = await signIn(loginEmail, loginPassword);
-    if (result.error) {
-      setError(result.error);
-    }
+    if (result.error) setError(result.error);
     setLoading(false);
   };
 
@@ -64,42 +104,38 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     if (signupPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError('Password must be at least 6 characters.');
       setLoading(false);
       return;
     }
-
     if (!signupOrg.trim()) {
-      setError('Organization name is required');
+      setError('Organization name is required.');
       setLoading(false);
       return;
     }
-
-    const result = await signUp(signupEmail, signupPassword, signupName, signupOrg);
-    if (result.error) {
-      setError(result.error);
-    } else if (result.needsConfirmation) {
+    const result = await signUp(
+      signupEmail,
+      signupPassword,
+      signupName,
+      signupOrg,
+    );
+    if (result.error) setError(result.error);
+    else if (result.needsConfirmation) {
       setSuccess('Check your email to confirm your account, then log in.');
     }
     setLoading(false);
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
       redirectTo: window.location.origin,
     });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess('Check your email for the password reset link.');
-    }
+    if (error) setError(error.message);
+    else setSuccess("Check your email for the reset link.");
     setLoading(false);
   };
 
@@ -107,23 +143,16 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError('Password must be at least 6 characters.');
       setLoading(false);
       return;
     }
-
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess('Password updated successfully! You can now log in.');
+    if (error) setError(error.message);
+    else {
+      setSuccess('Password updated. You can now log in.');
       setIsRecoveringPassword(false);
-      // Wait for success message to be seen, or just switch tab.
-      // Success view will render because success is set.
-      // When they click "Go to login", it'll handle it.
     }
     setLoading(false);
   };
@@ -136,360 +165,640 @@ export const AuthModal: React.FC = () => {
 
   if (!isAuthModalOpen) return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-        onClick={handleClose}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       >
-        {/* Backdrop */}
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-        {/* Modal */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
+          onClick={handleClose}
+          className="absolute inset-0 bg-lsl-ink/55 backdrop-blur-sm"
+          aria-hidden="true"
+        />
+
+        <motion.div
+          ref={modalRef}
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 16 }}
+          transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+          className="relative w-full max-w-md overflow-hidden rounded-3xl border border-lsl-stone bg-lsl-cream shadow-lsl-lift"
         >
-          {/* Close Button */}
           <button
+            type="button"
             onClick={handleClose}
-            className="absolute top-4 right-4 p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors z-10"
+            aria-label="Close"
+            className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/85 text-lsl-graphite shadow-lsl-card backdrop-blur-sm transition-colors hover:bg-white hover:text-lsl-ink"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" strokeWidth={2} />
           </button>
 
-          {/* Header */}
-          <div className="px-8 pt-8 pb-4">
-            <div className="flex items-center gap-3 mb-6">
+          <div className="px-8 pt-8">
+            <div className="flex items-center gap-3">
               <img
                 src="/LSL_Logo.png"
-                alt="Left Side Logos"
-                className="h-9 w-auto"
+                alt=""
+                className="h-9 w-auto brightness-0"
               />
-              <span className="font-display font-bold text-xl text-lsl-black tracking-tight">
-                Left Side Logos
+              <span
+                id="auth-modal-title"
+                className="font-display text-xl font-semibold tracking-tight text-lsl-ink"
+              >
+                {isRecoveringPassword
+                  ? 'Set a new password'
+                  : tab === 'forgot_password'
+                    ? 'Reset password'
+                    : tab === 'login'
+                      ? 'Welcome back'
+                      : 'Create your workspace'}
               </span>
             </div>
 
-            {/* Tab Switcher */}
-            {!isRecoveringPassword && (
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
+            {!isRecoveringPassword && tab !== 'forgot_password' && (
+              <div className="mt-6 inline-flex rounded-full border border-lsl-stone bg-white p-1">
+                <TabButton
+                  active={tab === 'login'}
                   onClick={() => switchTab('login')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-all ${
-                    tab === 'login' || tab === 'forgot_password'
-                      ? 'bg-white text-lsl-black shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
                 >
-                  Log In
-                </button>
-                <button
+                  Log in
+                </TabButton>
+                <TabButton
+                  active={tab === 'signup'}
                   onClick={() => switchTab('signup')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold transition-all ${
-                    tab === 'signup'
-                      ? 'bg-white text-lsl-black shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
                 >
-                  Sign Up
-                </button>
+                  Sign up
+                </TabButton>
               </div>
             )}
           </div>
 
-          {/* Content */}
-          <div className="px-8 pb-8">
+          <div className="px-8 pb-8 pt-6">
             {success ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center py-6 text-center"
-              >
-                <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-                <p className="text-sm text-gray-600">{success}</p>
-                <button
-                  onClick={() => { setSuccess(''); switchTab('login'); }}
-                  className="mt-4 text-sm font-semibold text-lsl-blue hover:underline"
-                >
-                  Go to Login
-                </button>
-              </motion.div>
+              <SuccessView
+                message={success}
+                onContinue={() => {
+                  setSuccess('');
+                  switchTab('login');
+                }}
+              />
             ) : isRecoveringPassword ? (
-              <form onSubmit={handleUpdatePassword} className="space-y-4 mt-4">
-                <h3 className="text-lg font-bold text-lsl-black mb-2">Update Password</h3>
-                <p className="text-sm text-gray-500 mb-4">Please enter your new password below.</p>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">New Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      minLength={6}
-                      className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <p className="text-sm text-red-500 font-medium bg-red-50 rounded-lg px-3 py-2">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-lsl-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    'Update Password'
-                  )}
-                </button>
-              </form>
+              <PasswordUpdateForm
+                value={newPassword}
+                onChange={setNewPassword}
+                showPassword={showPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                error={error}
+                loading={loading}
+                onSubmit={handleUpdatePassword}
+                firstRef={firstFieldRef}
+              />
             ) : tab === 'forgot_password' ? (
-              <form onSubmit={handleForgotPassword} className="space-y-4 mt-4">
-                <h3 className="text-lg font-bold text-lsl-black mb-2">Reset Password</h3>
-                <p className="text-sm text-gray-500 mb-4">Enter your email address and we'll send you a link to reset your password.</p>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="email"
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                  </div>
-                </div>
-
-                {error && (
-                  <p className="text-sm text-red-500 font-medium bg-red-50 rounded-lg px-3 py-2">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-lsl-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    'Send Reset Link'
-                  )}
-                </button>
-
-                <p className="text-center text-xs text-gray-400 mt-3">
-                  Remember your password?{' '}
-                  <button type="button" onClick={() => switchTab('login')} className="text-lsl-blue font-semibold hover:underline">
-                    Back to login
-                  </button>
-                </p>
-              </form>
+              <ForgotForm
+                email={resetEmail}
+                onEmailChange={setResetEmail}
+                error={error}
+                loading={loading}
+                onSubmit={handleForgot}
+                onBack={() => switchTab('login')}
+                firstRef={firstFieldRef}
+              />
             ) : tab === 'login' ? (
-              <form onSubmit={handleLogin} className="space-y-4 mt-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="email"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <div className="flex justify-end mt-1">
-                    <button type="button" onClick={() => switchTab('forgot_password')} className="text-[11px] text-lsl-blue font-medium hover:underline">
-                      Forgot password?
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <p className="text-sm text-red-500 font-medium bg-red-50 rounded-lg px-3 py-2">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-lsl-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    'Sign In'
-                  )}
-                </button>
-
-                <p className="text-center text-xs text-gray-400 mt-3">
-                  Don't have an account?{' '}
-                  <button type="button" onClick={() => switchTab('signup')} className="text-lsl-blue font-semibold hover:underline">
-                    Create one
-                  </button>
-                </p>
-              </form>
+              <LoginForm
+                email={loginEmail}
+                password={loginPassword}
+                showPassword={showPassword}
+                onEmail={setLoginEmail}
+                onPassword={setLoginPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                error={error}
+                loading={loading}
+                onSubmit={handleLogin}
+                onForgot={() => switchTab('forgot_password')}
+                onSwitch={() => switchTab('signup')}
+                firstRef={firstFieldRef}
+              />
             ) : (
-              <form onSubmit={handleSignup} className="space-y-3.5 mt-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Full Name</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      value={signupName}
-                      onChange={(e) => setSignupName(e.target.value)}
-                      placeholder="John Doe"
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Organization / Company Name</label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      value={signupOrg}
-                      onChange={(e) => setSignupOrg(e.target.value)}
-                      placeholder="Your Company Inc."
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                  </div>
-                  <p className="text-[11px] text-gray-400 pl-1">
-                    We'll create a workspace for your team. Employees can join later with an access code.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="email"
-                      value={signupEmail}
-                      onChange={(e) => setSignupEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-gray-700">Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="Min. 6 characters"
-                      required
-                      minLength={6}
-                      className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-lsl-blue/50 focus:border-lsl-blue transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <p className="text-sm text-red-500 font-medium bg-red-50 rounded-lg px-3 py-2">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-lsl-black text-white font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Creating account...
-                    </>
-                  ) : (
-                    'Create Account'
-                  )}
-                </button>
-
-                <p className="text-center text-xs text-gray-400 mt-2">
-                  Already have an account?{' '}
-                  <button type="button" onClick={() => switchTab('login')} className="text-lsl-blue font-semibold hover:underline">
-                    Sign in
-                  </button>
-                </p>
-              </form>
+              <SignupForm
+                name={signupName}
+                org={signupOrg}
+                email={signupEmail}
+                password={signupPassword}
+                showPassword={showPassword}
+                onName={setSignupName}
+                onOrg={setSignupOrg}
+                onEmail={setSignupEmail}
+                onPassword={setSignupPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                error={error}
+                loading={loading}
+                onSubmit={handleSignup}
+                onSwitch={() => switchTab('login')}
+                firstRef={firstFieldRef}
+              />
             )}
           </div>
         </motion.div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </AnimatePresence>,
+    document.body,
   );
 };
+
+// ─── Sub-components ───
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] transition-colors',
+        active
+          ? 'bg-lsl-ink text-lsl-cream'
+          : 'text-lsl-graphite hover:text-lsl-ink',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FormError({ message }: { message: string }) {
+  return (
+    <p
+      role="alert"
+      className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700"
+    >
+      {message}
+    </p>
+  );
+}
+
+function FieldWrap({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+          {label}
+        </span>
+        {hint && (
+          <span className="text-[11px] text-lsl-graphite/70">{hint}</span>
+        )}
+      </div>
+      {children}
+    </label>
+  );
+}
+
+const inputCls =
+  'h-11 w-full rounded-xl border border-lsl-stone bg-white pl-10 pr-4 text-sm text-lsl-ink placeholder:text-lsl-graphite/70 transition-colors focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30';
+
+const inputClsWithToggle = `${inputCls} pr-10`;
+
+function LoginForm(props: {
+  email: string;
+  password: string;
+  showPassword: boolean;
+  onEmail: (v: string) => void;
+  onPassword: (v: string) => void;
+  onToggleShow: () => void;
+  error: string;
+  loading: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onForgot: () => void;
+  onSwitch: () => void;
+  firstRef: React.RefObject<HTMLInputElement>;
+}) {
+  return (
+    <form onSubmit={props.onSubmit} className="space-y-4">
+      <FieldWrap label="Email">
+        <div className="relative">
+          <Mail
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            ref={props.firstRef}
+            type="email"
+            autoComplete="email"
+            required
+            value={props.email}
+            onChange={(e) => props.onEmail(e.target.value)}
+            placeholder="you@company.com"
+            className={inputCls}
+          />
+        </div>
+      </FieldWrap>
+
+      <FieldWrap label="Password">
+        <div className="relative">
+          <Lock
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            type={props.showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            required
+            value={props.password}
+            onChange={(e) => props.onPassword(e.target.value)}
+            placeholder="••••••••"
+            className={inputClsWithToggle}
+          />
+          <button
+            type="button"
+            onClick={props.onToggleShow}
+            aria-label={props.showPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-lsl-graphite hover:text-lsl-ink"
+          >
+            {props.showPassword ? (
+              <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+            ) : (
+              <Eye className="h-4 w-4" strokeWidth={1.75} />
+            )}
+          </button>
+        </div>
+        <div className="mt-1 flex justify-end">
+          <button
+            type="button"
+            onClick={props.onForgot}
+            className="text-[11px] font-medium text-lsl-navy underline-offset-4 hover:underline"
+          >
+            Forgot password?
+          </button>
+        </div>
+      </FieldWrap>
+
+      {props.error && <FormError message={props.error} />}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        disabled={props.loading}
+        className="w-full"
+      >
+        {props.loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} /> Signing in…
+          </>
+        ) : (
+          'Log in'
+        )}
+      </Button>
+
+      <p className="text-center text-xs text-lsl-graphite">
+        Don&apos;t have an account?{' '}
+        <button
+          type="button"
+          onClick={props.onSwitch}
+          className="font-medium text-lsl-navy underline-offset-4 hover:underline"
+        >
+          Create one
+        </button>
+      </p>
+    </form>
+  );
+}
+
+function SignupForm(props: {
+  name: string;
+  org: string;
+  email: string;
+  password: string;
+  showPassword: boolean;
+  onName: (v: string) => void;
+  onOrg: (v: string) => void;
+  onEmail: (v: string) => void;
+  onPassword: (v: string) => void;
+  onToggleShow: () => void;
+  error: string;
+  loading: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onSwitch: () => void;
+  firstRef: React.RefObject<HTMLInputElement>;
+}) {
+  return (
+    <form onSubmit={props.onSubmit} className="space-y-4">
+      <FieldWrap label="Full name">
+        <div className="relative">
+          <User
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            ref={props.firstRef}
+            type="text"
+            autoComplete="name"
+            required
+            value={props.name}
+            onChange={(e) => props.onName(e.target.value)}
+            placeholder="Jane Smith"
+            className={inputCls}
+          />
+        </div>
+      </FieldWrap>
+
+      <FieldWrap label="Organization" hint="Workspace name">
+        <div className="relative">
+          <Building2
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            type="text"
+            autoComplete="organization"
+            required
+            value={props.org}
+            onChange={(e) => props.onOrg(e.target.value)}
+            placeholder="Westview High Athletics"
+            className={inputCls}
+          />
+        </div>
+        <p className="mt-1 pl-1 text-[11px] text-lsl-graphite">
+          We&apos;ll create a portal for your team. Members join later with an access code.
+        </p>
+      </FieldWrap>
+
+      <FieldWrap label="Email">
+        <div className="relative">
+          <Mail
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            type="email"
+            autoComplete="email"
+            required
+            value={props.email}
+            onChange={(e) => props.onEmail(e.target.value)}
+            placeholder="you@company.com"
+            className={inputCls}
+          />
+        </div>
+      </FieldWrap>
+
+      <FieldWrap label="Password" hint="Min 6 characters">
+        <div className="relative">
+          <Lock
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            type={props.showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            minLength={6}
+            value={props.password}
+            onChange={(e) => props.onPassword(e.target.value)}
+            placeholder="••••••••"
+            className={inputClsWithToggle}
+          />
+          <button
+            type="button"
+            onClick={props.onToggleShow}
+            aria-label={props.showPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-lsl-graphite hover:text-lsl-ink"
+          >
+            {props.showPassword ? (
+              <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+            ) : (
+              <Eye className="h-4 w-4" strokeWidth={1.75} />
+            )}
+          </button>
+        </div>
+      </FieldWrap>
+
+      {props.error && <FormError message={props.error} />}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        disabled={props.loading}
+        className="w-full"
+      >
+        {props.loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} /> Creating account…
+          </>
+        ) : (
+          'Create account'
+        )}
+      </Button>
+
+      <p className="text-center text-xs text-lsl-graphite">
+        Already have an account?{' '}
+        <button
+          type="button"
+          onClick={props.onSwitch}
+          className="font-medium text-lsl-navy underline-offset-4 hover:underline"
+        >
+          Sign in
+        </button>
+      </p>
+    </form>
+  );
+}
+
+function ForgotForm(props: {
+  email: string;
+  onEmailChange: (v: string) => void;
+  error: string;
+  loading: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onBack: () => void;
+  firstRef: React.RefObject<HTMLInputElement>;
+}) {
+  return (
+    <form onSubmit={props.onSubmit} className="space-y-4">
+      <p className="text-sm text-lsl-graphite">
+        Enter your email and we&apos;ll send a reset link.
+      </p>
+      <FieldWrap label="Email">
+        <div className="relative">
+          <Mail
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            ref={props.firstRef}
+            type="email"
+            autoComplete="email"
+            required
+            value={props.email}
+            onChange={(e) => props.onEmailChange(e.target.value)}
+            placeholder="you@company.com"
+            className={inputCls}
+          />
+        </div>
+      </FieldWrap>
+
+      {props.error && <FormError message={props.error} />}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        disabled={props.loading}
+        className="w-full"
+      >
+        {props.loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} /> Sending…
+          </>
+        ) : (
+          'Send reset link'
+        )}
+      </Button>
+
+      <p className="text-center text-xs text-lsl-graphite">
+        Remembered it?{' '}
+        <button
+          type="button"
+          onClick={props.onBack}
+          className="font-medium text-lsl-navy underline-offset-4 hover:underline"
+        >
+          Back to login
+        </button>
+      </p>
+    </form>
+  );
+}
+
+function PasswordUpdateForm(props: {
+  value: string;
+  onChange: (v: string) => void;
+  showPassword: boolean;
+  onToggleShow: () => void;
+  error: string;
+  loading: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  firstRef: React.RefObject<HTMLInputElement>;
+}) {
+  return (
+    <form onSubmit={props.onSubmit} className="space-y-4">
+      <p className="text-sm text-lsl-graphite">
+        Enter a new password for your account.
+      </p>
+      <FieldWrap label="New password" hint="Min 6 characters">
+        <div className="relative">
+          <Lock
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            ref={props.firstRef}
+            type={props.showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            minLength={6}
+            value={props.value}
+            onChange={(e) => props.onChange(e.target.value)}
+            placeholder="••••••••"
+            className={inputClsWithToggle}
+          />
+          <button
+            type="button"
+            onClick={props.onToggleShow}
+            aria-label={props.showPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-lsl-graphite hover:text-lsl-ink"
+          >
+            {props.showPassword ? (
+              <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+            ) : (
+              <Eye className="h-4 w-4" strokeWidth={1.75} />
+            )}
+          </button>
+        </div>
+      </FieldWrap>
+
+      {props.error && <FormError message={props.error} />}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        disabled={props.loading}
+        className="w-full"
+      >
+        {props.loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} /> Updating…
+          </>
+        ) : (
+          'Update password'
+        )}
+      </Button>
+    </form>
+  );
+}
+
+function SuccessView({
+  message,
+  onContinue,
+}: {
+  message: string;
+  onContinue: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col items-center gap-4 py-6 text-center"
+    >
+      <CheckCircle
+        className="h-12 w-12 text-lsl-navy"
+        strokeWidth={1.5}
+        aria-hidden="true"
+      />
+      <p className="text-sm leading-relaxed text-lsl-graphite">{message}</p>
+      <Button variant="primary" size="md" onClick={onContinue}>
+        Go to login
+      </Button>
+    </motion.div>
+  );
+}
+
+// ─── Focus trap helper ───
+
+function trapFocus(e: KeyboardEvent, container: HTMLElement) {
+  const focusable = container.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}

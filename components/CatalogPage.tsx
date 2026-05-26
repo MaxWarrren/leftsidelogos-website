@@ -1,12 +1,36 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, ShoppingBag, ChevronLeft, ChevronRight, Tag, Ruler, Palette, ArrowRight, Minus, Plus, Check, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  ArrowRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  Minus,
+  Plus,
+  Search,
+  Shirt,
+  ShoppingBag,
+  Sparkles,
+  Tag,
+  X,
+} from 'lucide-react';
+
+import { Button } from './ui/button';
+import { cn } from '../lib/utils';
 import { getAllProducts } from '../lib/supabase';
+import { toast } from './ui/toaster';
 import { useCart } from './CartContext';
-import { PageHero } from './PageHero';
+import { useCartDrawer } from './CartDrawer';
 import type { CatalogProduct } from '../types';
 
-// ─── Fallback Products (using existing local images) ───
+// ─── Fallback Products ───
+
+// Centered ~36% × 34% rectangle — the typical chest-print box for a tee.
+const TEE_CHEST_PRINT_AREA = { x: 0.32, y: 0.26, width: 0.36, height: 0.34 };
+// Tighter ~30% × 18% rectangle near the front-panel crown — typical hat patch / embroidery area.
+const HAT_FRONT_PRINT_AREA = { x: 0.35, y: 0.32, width: 0.30, height: 0.22 };
+
 const FALLBACK_PRODUCTS: CatalogProduct[] = [
   {
     id: 'local-1',
@@ -14,13 +38,23 @@ const FALLBACK_PRODUCTS: CatalogProduct[] = [
     category: 'Hats',
     category_id: '',
     sku: '112',
-    description: 'The industry-standard trucker hat. Pre-curved visor with adjustable snapback. Perfect for embroidery, heat transfer, and leather patches. A fan favorite for its comfort and clean profile.',
+    description:
+      'The industry-standard trucker. Pre-curved visor, snapback closure. Ready for embroidery, transfer, or leather patches.',
     images: ['/catalog_pictures/hats-112-1.png', '/catalog_pictures/hats-112-2.png'],
     colors: ['Black/White', 'Navy/White', 'Charcoal/White', 'Red/White', 'Heather Grey/Black', 'All Black', 'Camo/Black'],
     sizes: ['OSFA (Adjustable)'],
     slug: 'richardson-112-trucker-hat',
-    base_price: 18.00,
+    base_price: 18.0,
     featured: true,
+    base_color: 'Black/White',
+    image_variants: {
+      front: { 'black/white': '/catalog_pictures/hats-112-1.png' },
+      side: { 'black/white': '/catalog_pictures/hats-112-2.png' },
+    },
+    print_areas: {
+      front: HAT_FRONT_PRINT_AREA,
+      side: { x: 0.45, y: 0.34, width: 0.22, height: 0.18 },
+    },
   },
   {
     id: 'local-2',
@@ -28,13 +62,23 @@ const FALLBACK_PRODUCTS: CatalogProduct[] = [
     category: 'Hats',
     category_id: '',
     sku: '6511',
-    description: 'Classic rope-front trucker hat with retro vibes. Structured crown with snapback closure. Great for embroidery and leather patch applications. Gives any brand an elevated, vintage look.',
+    description:
+      'Retro rope-front trucker with a structured crown. Pairs especially well with leather patches.',
     images: ['/catalog_pictures/hats-6511-1.png', '/catalog_pictures/hats-6511-2.png'],
     colors: ['Black', 'Navy', 'Khaki/White', 'Charcoal/Black', 'White/Navy'],
     sizes: ['OSFA (Adjustable)'],
     slug: 'richardson-6511-rope-hat',
-    base_price: 22.00,
+    base_price: 22.0,
     featured: true,
+    base_color: 'Black',
+    image_variants: {
+      front: { black: '/catalog_pictures/hats-6511-1.png' },
+      side: { black: '/catalog_pictures/hats-6511-2.png' },
+    },
+    print_areas: {
+      front: HAT_FRONT_PRINT_AREA,
+      side: { x: 0.45, y: 0.34, width: 0.22, height: 0.18 },
+    },
   },
   {
     id: 'local-3',
@@ -42,13 +86,21 @@ const FALLBACK_PRODUCTS: CatalogProduct[] = [
     category: 'T-Shirts',
     category_id: '',
     sku: '2000',
-    description: 'A reliable everyday tee with a classic fit. 100% ring-spun cotton for softness and durability. Ideal for DTF prints, screen printing, and heat transfer. Budget-friendly without sacrificing quality.',
+    description:
+      'Reliable everyday tee. 100% ring-spun cotton, ideal for DTF, screen print, and heat transfer.',
     images: ['/catalog_pictures/shirts-2000-1.png'],
     colors: ['Black', 'White', 'Navy', 'Sport Grey', 'Red', 'Royal Blue', 'Forest Green', 'Charcoal'],
     sizes: ['S', 'M', 'L', 'XL', '2XL', '3XL'],
     slug: 'gildan-2000-classic-tee',
-    base_price: 14.00,
+    base_price: 14.0,
     featured: false,
+    base_color: 'White',
+    image_variants: {
+      front: { white: '/catalog_pictures/shirts-2000-1.png' },
+    },
+    print_areas: {
+      front: TEE_CHEST_PRINT_AREA,
+    },
   },
   {
     id: 'local-4',
@@ -56,13 +108,21 @@ const FALLBACK_PRODUCTS: CatalogProduct[] = [
     category: 'T-Shirts',
     category_id: '',
     sku: '3001CVC',
-    description: 'Premium retail-quality tee with a modern, fitted silhouette. CVC blend (cotton/polyester) delivers an incredibly soft hand feel. Perfect for DTF and heat transfer — your go-to when quality matters.',
+    description:
+      'Retail-quality fit. CVC cotton/poly blend feels soft straight out of the bag — our DTF favorite.',
     images: ['/catalog_pictures/shirts-3001cvc-1.png'],
     colors: ['Black', 'White', 'Heather Navy', 'Heather Slate', 'Athletic Heather', 'Red', 'True Royal', 'Dark Grey Heather'],
     sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
     slug: 'bella-canvas-3001-cvc-tee',
-    base_price: 18.00,
+    base_price: 18.0,
     featured: true,
+    base_color: 'White',
+    image_variants: {
+      front: { white: '/catalog_pictures/shirts-3001cvc-1.png' },
+    },
+    print_areas: {
+      front: TEE_CHEST_PRINT_AREA,
+    },
   },
   {
     id: 'local-5',
@@ -70,109 +130,433 @@ const FALLBACK_PRODUCTS: CatalogProduct[] = [
     category: 'T-Shirts',
     category_id: '',
     sku: '5000',
-    description: 'The workhorse tee — heavyweight 5.3oz cotton built to last. Wide color range and consistent sizing make it the industry standard for custom prints. Great for events, crews, and bulk orders.',
+    description:
+      'The workhorse. Heavyweight 5.3oz cotton built to last; widest color and size range in the catalog.',
     images: ['/catalog_pictures/shirts-5000-1.png'],
     colors: ['Black', 'White', 'Navy', 'Red', 'Royal', 'Sport Grey', 'Forest Green', 'Cardinal Red', 'Safety Green'],
     sizes: ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
     slug: 'gildan-5000-heavy-cotton-tee',
-    base_price: 12.00,
+    base_price: 12.0,
     featured: false,
+    base_color: 'White',
+    image_variants: {
+      front: { white: '/catalog_pictures/shirts-5000-1.png' },
+    },
+    print_areas: {
+      front: TEE_CHEST_PRINT_AREA,
+    },
   },
 ];
 
-const ALL_CATEGORIES = ['All', 'Hats', 'T-Shirts', 'Hoodies', 'Accessories'];
+// ─── Categories ───
 
-// ─── Category Icons ───
-const categoryIcons: Record<string, string> = {
-  'All': '🏷️',
-  'Hats': '🧢',
-  'T-Shirts': '👕',
-  'Hoodies': '🧥',
-  'Accessories': '✨',
-};
+const CATEGORY_FILTERS: { value: string; label: string; icon: typeof Tag }[] = [
+  { value: 'All', label: 'All', icon: Tag },
+  { value: 'Hats', label: 'Hats', icon: Layers },
+  { value: 'T-Shirts', label: 'T-Shirts', icon: Shirt },
+  { value: 'Hoodies', label: 'Hoodies', icon: Shirt },
+  { value: 'Accessories', label: 'Accessories', icon: Sparkles },
+];
+
+type SortKey = 'featured' | 'name' | 'price-asc' | 'price-desc';
 
 interface CatalogPageProps {
   onNavigateToCart?: () => void;
   onNavigateToMockupWithProduct?: (product: CatalogProduct) => void;
 }
 
-// ─── Product Card ───
-const ProductCard: React.FC<{ product: CatalogProduct; onClick: () => void; index: number }> = ({ product, onClick, index }) => {
-  const primaryImage = product.images?.[0] || null;
+// ─── Main ───
+
+export const CatalogPage: React.FC<CatalogPageProps> = ({
+  onNavigateToMockupWithProduct,
+}) => {
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('featured');
+  const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const supabaseProducts = await getAllProducts();
+        if (!mounted) return;
+        setProducts(
+          supabaseProducts && supabaseProducts.length > 0
+            ? supabaseProducts
+            : FALLBACK_PRODUCTS,
+        );
+      } catch (err) {
+        console.warn('Supabase fetch failed, using local catalog:', err);
+        if (mounted) setProducts(FALLBACK_PRODUCTS);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredProducts = useMemo(() => {
+    let result = products;
+    if (activeCategory !== 'All') {
+      result = result.filter((p) => p.category === activeCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.sku.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q),
+      );
+    }
+    const sorted = [...result];
+    switch (sort) {
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'price-asc':
+        sorted.sort((a, b) => a.base_price - b.base_price);
+        break;
+      case 'price-desc':
+        sorted.sort((a, b) => b.base_price - a.base_price);
+        break;
+      default:
+        sorted.sort((a, b) => Number(!!b.featured) - Number(!!a.featured));
+    }
+    return sorted;
+  }, [products, activeCategory, searchQuery, sort]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.4, delay: index * 0.06 }}
+    <>
+      <CatalogBanner />
+
+      <section className="min-h-[60vh] bg-lsl-cream py-12 md:py-16">
+        <div className="mx-auto max-w-7xl px-6 md:px-10">
+          <CatalogFilters
+            categories={CATEGORY_FILTERS}
+            activeCategory={activeCategory}
+            onCategoryChange={setActiveCategory}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            sort={sort}
+            onSortChange={setSort}
+          />
+
+          <div className="mt-6 flex items-baseline justify-between">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-graphite">
+              {loading
+                ? 'Loading…'
+                : `${filteredProducts.length} product${
+                    filteredProducts.length === 1 ? '' : 's'
+                  }`}
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <motion.div
+              layout
+              className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            >
+              <AnimatePresence mode="popLayout">
+                {filteredProducts.map((product, index) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    index={index}
+                    onOpen={() => setSelectedProduct(product)}
+                  />
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </div>
+      </section>
+
+      <AnimatePresence>
+        {selectedProduct && (
+          <ProductModal
+            product={selectedProduct}
+            onClose={() => setSelectedProduct(null)}
+            onNavigateToMockupWithProduct={onNavigateToMockupWithProduct}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
+// ─── Banner ───
+
+function CatalogBanner() {
+  return (
+    <section className="relative overflow-hidden bg-lsl-ink pt-28 pb-16 text-lsl-cream md:pt-32 md:pb-20">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-[0.06]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, #F7F4EE 1px, transparent 1px), linear-gradient(to bottom, #F7F4EE 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+          maskImage:
+            'radial-gradient(ellipse at center, black 35%, transparent 80%)',
+        }}
+      />
+      <div className="pointer-events-none absolute -right-20 -top-12 h-72 w-72 rounded-full bg-lsl-thread/15 blur-[120px]" />
+
+      <div className="relative mx-auto flex max-w-7xl flex-col items-start gap-3 px-6 md:px-10">
+        <span className="inline-flex items-center gap-2 rounded-full border border-lsl-cream/20 bg-lsl-cream/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-lsl-cream/80 backdrop-blur-sm">
+          <Tag className="h-3 w-3" strokeWidth={1.75} />
+          Catalog
+        </span>
+        <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-[-0.02em] md:text-5xl lg:text-6xl">
+          Premium blanks,
+          <br />
+          <span className="text-lsl-cream/65">ready for your brand.</span>
+        </h1>
+        <p className="mt-3 max-w-xl text-base leading-relaxed text-lsl-cream/70">
+          A curated selection of the hats, tees, and accessories we run every week. Don&apos;t see a SKU? Anything on SS Activewear is fair game — just ask.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ─── Filters bar ───
+
+function CatalogFilters({
+  categories,
+  activeCategory,
+  onCategoryChange,
+  searchQuery,
+  onSearchChange,
+  sort,
+  onSortChange,
+}: {
+  categories: typeof CATEGORY_FILTERS;
+  activeCategory: string;
+  onCategoryChange: (c: string) => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  sort: SortKey;
+  onSortChange: (s: SortKey) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <nav
+        aria-label="Filter by category"
+        className="no-scrollbar -mx-2 flex items-center gap-2 overflow-x-auto px-2"
+      >
+        {categories.map((cat) => {
+          const Icon = cat.icon;
+          const active = activeCategory === cat.value;
+          return (
+            <button
+              key={cat.value}
+              type="button"
+              onClick={() => onCategoryChange(cat.value)}
+              aria-pressed={active}
+              className={cn(
+                'inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-sm font-medium transition-all',
+                active
+                  ? 'border-lsl-ink bg-lsl-ink text-lsl-cream shadow-lsl-card'
+                  : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+              {cat.label}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 md:w-72 md:flex-none">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lsl-graphite"
+            strokeWidth={1.75}
+          />
+          <input
+            type="search"
+            placeholder="Search by name or SKU"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="h-10 w-full rounded-full border border-lsl-stone bg-white pl-9 pr-9 text-sm text-lsl-ink placeholder:text-lsl-graphite/70 transition-colors focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => onSearchChange('')}
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-lsl-graphite transition-colors hover:bg-lsl-stone/60 hover:text-lsl-ink"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          )}
+        </div>
+        <label className="hidden md:block">
+          <span className="sr-only">Sort by</span>
+          <select
+            value={sort}
+            onChange={(e) => onSortChange(e.target.value as SortKey)}
+            className="h-10 rounded-full border border-lsl-stone bg-white px-4 text-sm font-medium text-lsl-ink transition-colors focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
+          >
+            <option value="featured">Featured</option>
+            <option value="name">Name (A→Z)</option>
+            <option value="price-asc">Price (low → high)</option>
+            <option value="price-desc">Price (high → low)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// ─── Product Card ───
+
+function ProductCard({
+  product,
+  onOpen,
+  index,
+}: {
+  product: CatalogProduct;
+  onOpen: () => void;
+  index: number;
+}) {
+  const { addToCart } = useCart();
+  const { openDrawer } = useCartDrawer();
+  const primaryImage = product.images?.[0] ?? null;
+
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    addToCart({
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      category: product.category,
+      color: product.colors[0] ?? '—',
+      size: product.sizes[0] ?? '—',
+      quantity: 1,
+      basePrice: product.base_price,
+      image: primaryImage,
+    });
+    toast.success('Added to project', {
+      description: product.name,
+      action: { label: 'View cart', onClick: openDrawer },
+    });
+  };
+
+  return (
+    <motion.article
       layout
-      className="group cursor-pointer bg-white rounded-2xl shadow-sm hover:shadow-xl border border-gray-100 overflow-hidden transition-all duration-300 hover:-translate-y-1"
-      onClick={onClick}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.3, delay: Math.min(index, 6) * 0.04 }}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-lsl-stone bg-white shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift"
+      onClick={onOpen}
     >
-      {/* Image */}
-      <div className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+      <div className="relative aspect-square overflow-hidden bg-lsl-cream">
         {primaryImage ? (
           <img
             src={primaryImage}
             alt={product.name}
-            className="w-full h-full object-contain p-6 group-hover:scale-105 transition-transform duration-500"
+            loading="lazy"
+            className="h-full w-full object-contain p-6 transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-300">
-            <ShoppingBag className="w-16 h-16" />
+          <div className="grid h-full w-full place-items-center text-lsl-stone">
+            <ShoppingBag className="h-12 w-12" strokeWidth={1.25} />
           </div>
         )}
-        {/* Category Badge */}
-        <div className="absolute top-3 left-3 px-3 py-1 bg-lsl-black/80 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-widest rounded-full">
+
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-lsl-stone bg-white/95 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-ink shadow-lsl-card backdrop-blur-sm">
           {product.category}
-        </div>
-        {/* Featured Badge */}
+        </span>
         {product.featured && (
-          <div className="absolute top-3 right-3 px-3 py-1 bg-lsl-blue text-white text-[10px] font-bold uppercase tracking-widest rounded-full">
-            Popular
-          </div>
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-lsl-thread/40 bg-lsl-thread/15 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-thread shadow-lsl-card backdrop-blur-sm">
+            <Sparkles className="h-2.5 w-2.5" strokeWidth={2} /> Popular
+          </span>
         )}
+
+        <button
+          type="button"
+          onClick={handleQuickAdd}
+          className="absolute bottom-3 right-3 inline-flex h-10 items-center gap-1.5 rounded-full bg-lsl-ink px-4 text-xs font-semibold text-lsl-cream opacity-0 shadow-lsl-lift transition-all duration-300 hover:bg-lsl-navy group-hover:opacity-100 group-focus-within:opacity-100 md:translate-y-1 md:group-hover:translate-y-0"
+        >
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} /> Quick add
+        </button>
       </div>
 
-      {/* Info */}
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-display font-bold text-lg text-gray-900 leading-tight group-hover:text-lsl-blue transition-colors">
+      <div className="flex flex-1 flex-col p-5">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-display text-base font-semibold leading-tight text-lsl-ink">
             {product.name}
           </h3>
-        </div>
-        <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">SKU: {product.sku}</p>
-        <div className="flex items-center justify-between">
-          <span className="text-xl font-display font-bold text-lsl-blue">
+          <span className="font-display text-base font-semibold tabular-nums text-lsl-ink">
             ${product.base_price.toFixed(2)}
           </span>
-          <span className="text-xs text-gray-400 font-medium">
-            {product.colors.length} colors · {product.sizes.length} sizes
-          </span>
         </div>
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+          SKU {product.sku}
+        </p>
+        <p className="mt-3 text-xs text-lsl-graphite">
+          <span className="tabular-nums">{product.colors.length}</span> color
+          {product.colors.length === 1 ? '' : 's'} ·{' '}
+          <span className="tabular-nums">{product.sizes.length}</span> size
+          {product.sizes.length === 1 ? '' : 's'}
+        </p>
       </div>
-    </motion.div>
+    </motion.article>
   );
-};
+}
 
-// ─── Product Detail Modal ───
-const ProductModal: React.FC<{
+// ─── Modal ───
+
+function ProductModal({
+  product,
+  onClose,
+  onNavigateToMockupWithProduct,
+}: {
   product: CatalogProduct;
   onClose: () => void;
-  onNavigateToCart?: () => void;
-  onNavigateToMockupWithProduct?: (product: CatalogProduct) => void;
-}> = ({ product, onClose, onNavigateToCart, onNavigateToMockupWithProduct }) => {
+  onNavigateToMockupWithProduct?: (p: CatalogProduct) => void;
+}) {
   const { addToCart } = useCart();
-  const allImages = product.images || [];
+  const { openDrawer } = useCartDrawer();
 
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
-  const [selectedColor, setSelectedColor] = useState(product.colors[0] || '');
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || '');
-  const [quantity, setQuantity] = useState(1);
-  const [showMockupPrompt, setShowMockupPrompt] = useState(false);
+  const [selectedColor, setSelectedColor] = useState(product.colors[0] ?? '');
+  const [selectedSize, setSelectedSize] = useState(product.sizes[0] ?? '');
+  const [quantity, setQuantity] = useState(12);
 
-  const primaryImage = allImages[0] || null;
+  // Trap ESC.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const allImages = product.images ?? [];
+  const primaryImage = allImages[0] ?? null;
 
   const handleAddToCart = () => {
     addToCart({
@@ -186,8 +570,11 @@ const ProductModal: React.FC<{
       basePrice: product.base_price,
       image: primaryImage,
     });
-    setShowMockupPrompt(true);
-    setQuantity(1);
+    toast.success('Added to project', {
+      description: `${quantity}× ${product.name} · ${selectedColor} · ${selectedSize}`,
+      action: { label: 'View cart', onClick: openDrawer },
+    });
+    onClose();
   };
 
   return (
@@ -195,470 +582,281 @@ const ProductModal: React.FC<{
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-lsl-ink/55 p-4 backdrop-blur-sm"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="catalog-modal-title"
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 30 }}
+        initial={{ opacity: 0, scale: 0.97, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: 30 }}
-        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        exit={{ opacity: 0, scale: 0.97, y: 12 }}
+        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-lsl-cream shadow-lsl-lift md:max-h-[88vh] md:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-col md:flex-row">
-          {/* Image Gallery */}
-          <div className="md:w-1/2 relative bg-gradient-to-br from-gray-50 to-gray-100 rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none min-h-[300px] md:min-h-[500px] flex items-center justify-center">
-            {allImages.length > 0 ? (
-              <>
-                <AnimatePresence mode="wait">
-                  <motion.img
-                    key={currentImageIdx}
-                    src={allImages[currentImageIdx]}
-                    alt={product.name}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="w-full h-full object-contain p-8 md:p-12"
-                  />
-                </AnimatePresence>
-                {allImages.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => setCurrentImageIdx(i => (i - 1 + allImages.length) % allImages.length)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                    >
-                      <ChevronLeft className="w-5 h-5 text-gray-700" />
-                    </button>
-                    <button
-                      onClick={() => setCurrentImageIdx(i => (i + 1) % allImages.length)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                    >
-                      <ChevronRight className="w-5 h-5 text-gray-700" />
-                    </button>
-                    {/* Image Dots */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                      {allImages.map((_, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setCurrentImageIdx(idx)}
-                          className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIdx ? 'bg-lsl-blue w-6' : 'bg-gray-300'}`}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <ShoppingBag className="w-20 h-20 text-gray-300" />
-            )}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/85 text-lsl-graphite shadow-lsl-card backdrop-blur-sm transition-colors hover:bg-white hover:text-lsl-ink"
+        >
+          <X className="h-4 w-4" strokeWidth={2} />
+        </button>
+
+        <div className="relative flex min-h-[300px] flex-1 items-center justify-center bg-white md:min-h-[520px] md:w-1/2">
+          {allImages.length ? (
+            <>
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={currentImageIdx}
+                  src={allImages[currentImageIdx]}
+                  alt={product.name}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="h-full w-full object-contain p-10 md:p-14"
+                />
+              </AnimatePresence>
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentImageIdx(
+                        (i) => (i - 1 + allImages.length) % allImages.length,
+                      )
+                    }
+                    aria-label="Previous image"
+                    className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-lsl-stone bg-white/85 text-lsl-graphite shadow-lsl-card backdrop-blur-sm transition-colors hover:bg-white hover:text-lsl-ink"
+                  >
+                    <ChevronLeft className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentImageIdx((i) => (i + 1) % allImages.length)
+                    }
+                    aria-label="Next image"
+                    className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-lsl-stone bg-white/85 text-lsl-graphite shadow-lsl-card backdrop-blur-sm transition-colors hover:bg-white hover:text-lsl-ink"
+                  >
+                    <ChevronRight className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                  <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">
+                    {allImages.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setCurrentImageIdx(i)}
+                        aria-label={`Show image ${i + 1}`}
+                        className={cn(
+                          'h-1.5 rounded-full transition-all',
+                          i === currentImageIdx
+                            ? 'w-6 bg-lsl-ink'
+                            : 'w-1.5 bg-lsl-stone hover:bg-lsl-graphite',
+                        )}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <ShoppingBag className="h-16 w-16 text-lsl-stone" strokeWidth={1.25} />
+          )}
+        </div>
+
+        <div className="flex flex-1 flex-col overflow-y-auto p-7 md:w-1/2 md:p-9">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-lsl-stone bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+              {product.category}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+              SKU {product.sku}
+            </span>
           </div>
 
-          {/* Details */}
-          <div className="md:w-1/2 p-8 md:p-10 flex flex-col">
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors z-10"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
+          <h2
+            id="catalog-modal-title"
+            className="mt-3 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-[2rem]"
+          >
+            {product.name}
+          </h2>
 
-            <div className="flex items-center gap-2 mb-4">
-              <span className="px-3 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-widest rounded-full">
-                {product.category}
-              </span>
-              <span className="text-xs text-gray-400 font-medium">SKU: {product.sku}</span>
-            </div>
+          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-lsl-ink">
+            ${product.base_price.toFixed(2)}{' '}
+            <span className="text-sm font-normal text-lsl-graphite">/ unit</span>
+          </p>
 
-            <h2 className="text-2xl md:text-3xl font-display font-bold text-gray-900 mb-3">
-              {product.name}
-            </h2>
-
-            <p className="text-3xl font-display font-bold text-lsl-blue mb-6">
-              ${product.base_price.toFixed(2)}
-              <span className="text-sm font-sans font-normal text-gray-400 ml-2">per unit</span>
+          {product.description && (
+            <p className="mt-5 text-sm leading-relaxed text-lsl-graphite">
+              {product.description}
             </p>
+          )}
 
-            {product.description && (
-              <p className="text-gray-600 leading-relaxed mb-8 text-sm">
-                {product.description}
+          <div className="mt-6 space-y-5">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+                Color · <span className="text-lsl-ink">{selectedColor}</span>
               </p>
-            )}
-
-            {/* Colors */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Palette className="w-4 h-4 text-gray-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                  Color — {selectedColor}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {product.colors.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => setSelectedColor(color)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      selectedColor === color
-                        ? 'bg-lsl-black text-white border-lsl-black'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-                    }`}
-                  >
-                    {color}
-                  </button>
-                ))}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {product.colors.map((color) => {
+                  const active = selectedColor === color;
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setSelectedColor(color)}
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+                        active
+                          ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
+                          : 'border-lsl-stone bg-white text-lsl-ink hover:border-lsl-ink',
+                      )}
+                    >
+                      {color}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Sizes */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Ruler className="w-4 h-4 text-gray-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                  Size — {selectedSize}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {product.sizes.map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
-                      selectedSize === size
-                        ? 'bg-lsl-blue text-white border-lsl-blue'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-lsl-blue'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+                Size · <span className="text-lsl-ink">{selectedSize}</span>
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {product.sizes.map((size) => {
+                  const active = selectedSize === size;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setSelectedSize(size)}
+                      className={cn(
+                        'min-w-[44px] rounded-lg border px-3 py-2 text-sm font-medium transition-all',
+                        active
+                          ? 'border-lsl-navy bg-lsl-navy text-lsl-cream'
+                          : 'border-lsl-stone bg-white text-lsl-ink hover:border-lsl-navy',
+                      )}
+                    >
+                      {size}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Quantity */}
-            <div className="mb-8">
-              <div className="flex items-center gap-2 mb-3">
-                <ShoppingBag className="w-4 h-4 text-gray-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                  Quantity
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+                Quantity
+              </p>
+              <div className="mt-2 flex items-center gap-3">
                 <button
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-lsl-blue hover:text-lsl-blue transition-all"
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  aria-label="Decrease quantity"
+                  className="grid h-11 w-11 place-items-center rounded-lg border border-lsl-stone text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
                 >
-                  <Minus className="w-4 h-4" />
+                  <Minus className="h-4 w-4" strokeWidth={2} />
                 </button>
                 <input
                   type="number"
                   min={1}
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-20 h-10 text-center rounded-xl border-2 border-gray-200 font-bold text-lg focus:border-lsl-blue focus:outline-none transition-colors"
+                  onChange={(e) =>
+                    setQuantity(Math.max(1, parseInt(e.target.value || '1', 10)))
+                  }
+                  className="h-11 w-20 rounded-lg border border-lsl-stone bg-white text-center font-mono text-base tabular-nums text-lsl-ink focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
                 />
                 <button
-                  onClick={() => setQuantity(q => q + 1)}
-                  className="w-10 h-10 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-lsl-blue hover:text-lsl-blue transition-all"
+                  type="button"
+                  onClick={() => setQuantity((q) => q + 1)}
+                  aria-label="Increase quantity"
+                  className="grid h-11 w-11 place-items-center rounded-lg border border-lsl-stone text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="h-4 w-4" strokeWidth={2} />
                 </button>
-                <span className="text-sm text-gray-400 ml-2">
-                  = <span className="font-bold text-gray-700">${(quantity * product.base_price).toFixed(2)}</span>
+                <span className="ml-2 text-sm text-lsl-graphite">
+                  ={' '}
+                  <span className="font-display font-semibold tabular-nums text-lsl-ink">
+                    ${(quantity * product.base_price).toFixed(2)}
+                  </span>
                 </span>
               </div>
             </div>
+          </div>
 
-            {/* CTA */}
-            <div className="mt-auto space-y-3">
-              <button
-                onClick={handleAddToCart}
-                disabled={showMockupPrompt}
-                className="w-full group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg shadow-lg transition-all duration-300 bg-lsl-black text-white hover:shadow-xl"
+          <div className="mt-8 space-y-2.5">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleAddToCart}
+              className="w-full"
+            >
+              <ShoppingBag className="h-4 w-4" strokeWidth={1.75} /> Add to project
+              <ArrowRight className="h-4 w-4" strokeWidth={2} />
+            </Button>
+            {onNavigateToMockupWithProduct && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  onClose();
+                  onNavigateToMockupWithProduct(product);
+                }}
+                className="w-full"
               >
-                <ShoppingBag className="w-5 h-5" />
-                <span>Add to Cart</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-              {onNavigateToMockupWithProduct && (
-                <button
-                  onClick={() => { onClose(); onNavigateToMockupWithProduct(product); }}
-                  className="w-full group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg border-2 border-gray-200 text-gray-600 hover:border-lsl-black hover:text-lsl-black transition-all"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  <span>Visualize in Mockup Studio</span>
-                </button>
-              )}
-              {onNavigateToCart && (
-                <button
-                  onClick={() => { onClose(); onNavigateToCart(); }}
-                  className="w-full py-3 text-center text-sm font-semibold text-gray-400 hover:text-lsl-black transition-colors"
-                >
-                  View Cart & Build Order →
-                </button>
-              )}
-            </div>
-
-            {/* Mockup Prompt Overlay */}
-            <AnimatePresence>
-              {showMockupPrompt && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center p-8 text-center"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                    className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-6"
-                  >
-                    <Check className="w-8 h-8 text-green-600" />
-                  </motion.div>
-                  <h3 className="text-2xl font-display font-bold text-lsl-black mb-2">Added to Cart!</h3>
-                  <p className="text-gray-500 font-light mb-8 max-w-xs">
-                    Would you like to see how your logo looks on the <span className="font-semibold text-lsl-black">{product.name}</span>?
-                  </p>
-                  <div className="w-full space-y-3 max-w-xs">
-                    {onNavigateToMockupWithProduct && (
-                      <button
-                        onClick={() => { onClose(); onNavigateToMockupWithProduct(product); }}
-                        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-lsl-black text-white rounded-2xl font-bold text-base hover:shadow-xl transition-all"
-                      >
-                        <Sparkles className="w-5 h-5" />
-                        Generate Mockup
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setShowMockupPrompt(false)}
-                      className="w-full py-3 text-sm font-semibold text-gray-400 hover:text-lsl-black transition-colors"
-                    >
-                      Continue Shopping
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Customize in
+                Mockup Studio
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>
     </motion.div>
   );
-};
+}
 
-// ─── Skeleton Loader ───
-const SkeletonCard: React.FC = () => (
-  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-pulse">
-    <div className="aspect-square bg-gray-100" />
-    <div className="p-5 space-y-3">
-      <div className="h-5 bg-gray-100 rounded w-3/4" />
-      <div className="h-3 bg-gray-100 rounded w-1/3" />
-      <div className="flex justify-between items-center">
-        <div className="h-6 bg-gray-100 rounded w-1/4" />
-        <div className="h-3 bg-gray-100 rounded w-1/3" />
+// ─── States ───
+
+function SkeletonCard() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-lsl-stone bg-white shadow-lsl-card">
+      <div className="aspect-square skeleton" />
+      <div className="space-y-3 p-5">
+        <div className="h-4 w-3/4 rounded-md skeleton" />
+        <div className="h-3 w-1/3 rounded-md skeleton" />
+        <div className="flex items-center justify-between">
+          <div className="h-5 w-1/4 rounded-md skeleton" />
+          <div className="h-3 w-1/3 rounded-md skeleton" />
+        </div>
       </div>
     </div>
-  </div>
-);
-
-// ─── Main Catalog Page ───
-export const CatalogPage: React.FC<CatalogPageProps> = ({ onNavigateToCart, onNavigateToMockupWithProduct }) => {
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
-  const { getCartCount } = useCart();
-  const cartCount = getCartCount();
-
-  // Fetch products from Supabase, fallback to local data
-  useEffect(() => {
-    let mounted = true;
-    async function fetchProducts() {
-      try {
-        const supabaseProducts = await getAllProducts();
-        if (mounted) {
-          if (supabaseProducts && supabaseProducts.length > 0) {
-            setProducts(supabaseProducts);
-          } else {
-            // Use fallback local data if Supabase has no products yet
-            setProducts(FALLBACK_PRODUCTS);
-          }
-          setLoading(false);
-        }
-      } catch (err) {
-        console.warn('Supabase fetch failed, using local catalog data:', err);
-        if (mounted) {
-          setProducts(FALLBACK_PRODUCTS);
-          setLoading(false);
-        }
-      }
-    }
-    fetchProducts();
-    return () => { mounted = false; };
-  }, []);
-
-  // Filter products
-  const filteredProducts = useMemo(() => {
-    let result = products;
-    if (activeCategory !== 'All') {
-      result = result.filter(p => p.category === activeCategory);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q)
-      );
-    }
-    return result;
-  }, [products, activeCategory, searchQuery]);
-
-  return (
-    <>
-      {/* Hero Banner */}
-      <PageHero className="pt-32 pb-20">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur-sm text-white text-xs font-bold uppercase tracking-[0.2em] rounded-full mb-6 border border-white/20">
-              <Tag className="w-3 h-3 inline mr-2 -mt-0.5" />
-              Product Catalog
-            </span>
-            <h1 className="text-4xl md:text-6xl font-display font-bold text-white mb-4 leading-tight">
-              Premium Blanks for<br />
-              Your Custom Designs
-            </h1>
-            <p className="text-lg text-gray-300 max-w-2xl mx-auto font-light">
-              Browse our curated selection of high-quality apparel and accessories. Every item is ready for your custom branding.
-            </p>
-            {/* Cart floating indicator */}
-            {cartCount > 0 && onNavigateToCart && (
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                onClick={onNavigateToCart}
-                className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-white text-lsl-black rounded-full font-bold text-sm hover:bg-gray-100 hover:shadow-lg transition-all"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                View Cart ({cartCount} items)
-                <ArrowRight className="w-4 h-4" />
-              </motion.button>
-            )}
-          </motion.div>
-        </div>
-      </PageHero>
-
-      {/* Filters + Grid */}
-      <section className="py-12 bg-[#f4f4f5] min-h-[60vh]">
-        <div className="container mx-auto px-4">
-
-          {/* Search + Filter Bar */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-col md:flex-row items-center justify-between gap-4 mb-10"
-          >
-            {/* Category Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-              {ALL_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
-                    activeCategory === cat
-                      ? 'bg-lsl-black text-white shadow-md'
-                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  <span>{categoryIcons[cat]}</span>
-                  <span>{cat}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search products or SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-lsl-blue/30 focus:border-lsl-blue transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                >
-                  <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                </button>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Results count */}
-          <div className="mb-6 text-sm text-gray-400 font-medium">
-            {loading ? 'Loading...' : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''}`}
-          </div>
-
-          {/* Product Grid */}
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-20"
-            >
-              <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-display font-bold text-gray-400 mb-2">No products found</h3>
-              <p className="text-gray-400 text-sm">Try adjusting your search or filter.</p>
-            </motion.div>
-          ) : (
-            <motion.div
-              layout
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-            >
-              <AnimatePresence mode="popLayout">
-                {filteredProducts.map((product, index) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    index={index}
-                    onClick={() => setSelectedProduct(product)}
-                  />
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </div>
-      </section>
-
-      {/* Product Detail Modal */}
-      <AnimatePresence>
-        {selectedProduct && (
-          <ProductModal
-            product={selectedProduct}
-            onClose={() => setSelectedProduct(null)}
-            onNavigateToCart={onNavigateToCart}
-            onNavigateToMockupWithProduct={onNavigateToMockupWithProduct}
-          />
-        )}
-      </AnimatePresence>
-    </>
   );
-};
+}
+
+function EmptyState() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="mt-12 flex flex-col items-center gap-4 rounded-2xl border border-dashed border-lsl-stone bg-white px-6 py-16 text-center"
+    >
+      <div className="grid h-14 w-14 place-items-center rounded-full bg-lsl-stone/60 text-lsl-graphite">
+        <Search className="h-6 w-6" strokeWidth={1.5} />
+      </div>
+      <div>
+        <p className="font-display text-lg font-semibold text-lsl-ink">
+          No products match
+        </p>
+        <p className="mt-1 text-sm text-lsl-graphite">
+          Try clearing filters or searching by SKU.
+        </p>
+      </div>
+    </motion.div>
+  );
+}

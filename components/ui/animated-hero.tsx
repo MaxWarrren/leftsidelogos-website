@@ -1,104 +1,262 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { MoveRight, PhoneCall, CheckCircle2 } from "lucide-react";
-import { Button } from "./button";
-import { PageHero } from "../PageHero";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from 'framer-motion';
+import { ArrowRight, ChevronRight, Pause, Play } from 'lucide-react';
+
+import { Button } from './button';
 
 interface HeroProps {
   onStartDesigning: () => void;
 }
 
+const rotatingAudiences = [
+  'sports team.',
+  'small business.',
+  'Greek org.',
+  'local event.',
+  'corporation.',
+  'crew.',
+];
+
+const trustStrip = [
+  'Embroidery',
+  'Screen Printing',
+  'DTF Transfer',
+  'Leather Patches',
+  'Fulfillment',
+  'No Minimums',
+  'In-House Production',
+  'Missouri Made',
+];
+
 function Hero({ onStartDesigning }: HeroProps) {
-  const [titleNumber, setTitleNumber] = useState(0);
-  const titles = useMemo(
-    () => ["Sports Team", "Small Business", "Greek Organization", "Local Event", "Corporation", "Club"],
-    []
-  );
+  const prefersReducedMotion = useReducedMotion();
+  const [titleIndex, setTitleIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const titles = useMemo(() => rotatingAudiences, []);
+  const hovered = useRef(false);
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (titleNumber === titles.length - 1) {
-        setTitleNumber(0);
-      } else {
-        setTitleNumber(titleNumber + 1);
-      }
-    }, 2000);
-    return () => clearTimeout(timeoutId);
-  }, [titleNumber, titles]);
+    if (prefersReducedMotion || paused) return;
+    const interval = setInterval(() => {
+      if (hovered.current) return;
+      setTitleIndex((i) => (i + 1) % titles.length);
+    }, 2400);
+    return () => clearInterval(interval);
+  }, [paused, prefersReducedMotion, titles.length]);
 
   return (
-    <PageHero fullHeight className="pt-32 pb-16 md:pt-40 md:pb-24 flex items-center justify-center" id="home">
-      <div className="container mx-auto px-4">
-        <div className="flex flex-col items-center justify-center text-center gap-2 max-w-5xl mx-auto">
+    <section
+      id="home"
+      aria-label="Custom merchandise hero"
+      className="relative isolate overflow-hidden bg-lsl-navy text-lsl-cream"
+    >
+      <StitchGrid />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-lsl-navy via-lsl-navy to-lsl-navy-700" />
+      <div className="pointer-events-none absolute -top-32 right-[-12%] -z-10 h-[520px] w-[520px] rounded-full bg-lsl-thread/15 blur-[160px]" />
+      <div className="pointer-events-none absolute bottom-[-30%] left-[-10%] -z-10 h-[560px] w-[560px] rounded-full bg-lsl-cream/10 blur-[180px]" />
 
+      <div className="mx-auto flex min-h-[100svh] max-w-7xl flex-col px-6 pb-12 pt-28 md:px-10 md:pt-32">
+        <div className="flex flex-1 flex-col items-start justify-center">
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-bold tracking-widest text-white uppercase mb-6"
+            transition={{ duration: 0.4 }}
+            className="inline-flex items-center gap-2 rounded-full border border-lsl-cream/20 bg-lsl-cream/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-lsl-cream/80 backdrop-blur-sm"
           >
-            <CheckCircle2 size={14} />
-            <span>Premium Custom Branding</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-lsl-thread" />
+            Premium custom apparel · Made in Missouri
           </motion.div>
 
-          <div className="flex flex-col items-center w-full">
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-4xl md:text-6xl lg:text-7xl font-display font-bold text-white tracking-tighter leading-tight"
+          <h1 className="mt-8 max-w-[18ch] font-display text-[clamp(2.5rem,6.5vw,5.75rem)] font-semibold leading-[1.02] tracking-[-0.02em]">
+            <span className="block text-lsl-cream/70">Custom merch for your</span>
+            <span
+              className="relative mt-1 block min-h-[1.15em]"
+              onMouseEnter={() => {
+                hovered.current = true;
+              }}
+              onMouseLeave={() => {
+                hovered.current = false;
+              }}
+              onFocus={() => {
+                hovered.current = true;
+              }}
+              onBlur={() => {
+                hovered.current = false;
+              }}
             >
-              Custom Merchandise For Your
-            </motion.h1>
-
-            <div className="relative h-[60px] md:h-[90px] lg:h-[110px] w-full overflow-hidden flex items-center justify-center">
-              <AnimatePresence initial={false}>
-                <motion.span
-                  key={titleNumber}
-                  className="absolute text-4xl md:text-6xl lg:text-7xl font-display font-bold text-white tracking-tighter whitespace-nowrap leading-none flex items-center justify-center"
-                  initial={{ opacity: 0, y: 60 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -60 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 100,
-                    damping: 15,
-                    opacity: { duration: 0.2 }
-                  }}
+              {prefersReducedMotion ? (
+                <span className="text-lsl-cream">your brand.</span>
+              ) : (
+                <span
+                  className="relative inline-block"
+                  aria-live="polite"
+                  aria-atomic="true"
                 >
-                  {titles[titleNumber]}
-                </motion.span>
-              </AnimatePresence>
-            </div>
-          </div>
+                  <AnimatePresence initial={false} mode="wait">
+                    <motion.span
+                      key={titles[titleIndex]}
+                      initial={{ y: '60%', opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: '-60%', opacity: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 320,
+                        damping: 28,
+                        opacity: { duration: 0.18 },
+                      }}
+                      className="inline-block text-lsl-cream"
+                    >
+                      {titles[titleIndex]}
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+              )}
+              {!prefersReducedMotion && (
+                <button
+                  type="button"
+                  onClick={() => setPaused((p) => !p)}
+                  aria-label={
+                    paused
+                      ? 'Resume rotating audience text'
+                      : 'Pause rotating audience text'
+                  }
+                  aria-pressed={paused}
+                  className="absolute -right-12 top-1/2 hidden -translate-y-1/2 rounded-full border border-lsl-cream/20 bg-lsl-cream/5 p-2 text-lsl-cream/60 transition-colors hover:border-lsl-cream/40 hover:text-lsl-cream md:inline-flex"
+                >
+                  {paused ? (
+                    <Play className="h-3.5 w-3.5" strokeWidth={2} />
+                  ) : (
+                    <Pause className="h-3.5 w-3.5" strokeWidth={2} />
+                  )}
+                </button>
+              )}
+            </span>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="text-base md:text-lg text-gray-300 max-w-2xl font-normal mt-6"
-          >
-            At Left Side Logos, we bring your logo to life with high-quality custom apparel.
-            From embroidery to full-color decals, we handle everything in-house for exceptional results.
-          </motion.p>
+          <p className="mt-7 max-w-xl text-base leading-relaxed text-lsl-cream/75 md:text-lg">
+            Embroidery, screen printing, DTF, patches — every step handled in-house, with proofs you actually approve before we touch a press.
+          </p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="flex flex-col sm:flex-row gap-4 mt-10 w-full sm:w-auto"
-          >
-            <a href="#contact" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full h-14 px-8 text-sm font-bold tracking-widest border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-lsl-black transition-all rounded-xl" variant="outline">
-                <PhoneCall className="mr-2 w-4 h-4" /> SCHEDULE A DESIGN CALL
+          <div className="mt-10 flex w-full flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              variant="primary"
+              size="xl"
+              onClick={onStartDesigning}
+              className="group bg-lsl-cream text-lsl-ink hover:bg-lsl-cream hover:text-lsl-ink hover:brightness-95"
+            >
+              Start a project
+              <ArrowRight
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                strokeWidth={2}
+              />
+            </Button>
+            <a href="#about" className="sm:w-auto">
+              <Button
+                variant="secondary"
+                size="xl"
+                className="w-full border-lsl-cream/30 text-lsl-cream hover:bg-lsl-cream hover:text-lsl-ink sm:w-auto"
+              >
+                See the catalog
+                <ChevronRight className="h-4 w-4" strokeWidth={2} />
               </Button>
             </a>
-            <Button size="lg" className="w-full sm:w-auto h-14 px-8 text-sm font-bold tracking-widest bg-white text-lsl-black hover:bg-gray-100 shadow-xl hover:-translate-y-1 transition-all rounded-xl" onClick={onStartDesigning}>
-              GET INSTANT MOCKUPS <MoveRight className="ml-2 w-4 h-4" />
-            </Button>
-          </motion.div>
+          </div>
+
+          <dl className="mt-14 grid w-full max-w-2xl grid-cols-3 gap-6 border-t border-lsl-cream/10 pt-8 md:gap-10">
+            <HeroStat value="10k+" label="Orders fulfilled" />
+            <HeroStat value="2-3 wk" label="Avg turnaround" />
+            <HeroStat value="100%" label="In-house" />
+          </dl>
         </div>
       </div>
-    </PageHero>
+
+      <TrustMarquee items={trustStrip} reduced={!!prefersReducedMotion} />
+    </section>
+  );
+}
+
+function HeroStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div>
+      <dt className="sr-only">{label}</dt>
+      <dd className="font-display text-3xl font-semibold tracking-tight text-lsl-cream md:text-4xl">
+        <span className="tabular-nums">{value}</span>
+      </dd>
+      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.18em] text-lsl-cream/55">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function StitchGrid() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 -z-10 opacity-[0.07]"
+      style={{
+        backgroundImage:
+          'linear-gradient(to right, #F7F4EE 1px, transparent 1px), linear-gradient(to bottom, #F7F4EE 1px, transparent 1px)',
+        backgroundSize: '48px 48px',
+        maskImage:
+          'radial-gradient(ellipse at center top, black 35%, transparent 75%)',
+      }}
+    />
+  );
+}
+
+function TrustMarquee({
+  items,
+  reduced,
+}: {
+  items: string[];
+  reduced: boolean;
+}) {
+  // Duplicate for seamless scroll.
+  const doubled = useMemo(() => [...items, ...items], [items]);
+
+  return (
+    <div className="relative border-y border-lsl-cream/10 bg-lsl-navy-700/40 py-4">
+      <div
+        className="overflow-hidden"
+        style={{
+          maskImage:
+            'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
+        }}
+      >
+        {reduced ? (
+          <ul className="flex flex-wrap justify-center gap-x-8 gap-y-2 px-6 font-mono text-[11px] uppercase tracking-[0.2em] text-lsl-cream/60">
+            {items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : (
+          <motion.ul
+            initial={{ x: 0 }}
+            animate={{ x: '-50%' }}
+            transition={{
+              repeat: Infinity,
+              duration: 38,
+              ease: 'linear',
+            }}
+            className="flex w-max gap-12 px-6 font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-cream/55"
+          >
+            {doubled.map((item, idx) => (
+              <li key={`${item}-${idx}`} className="flex items-center gap-12">
+                <span>{item}</span>
+                <span aria-hidden="true" className="text-lsl-thread/60">
+                  ·
+                </span>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </div>
+    </div>
   );
 }
 

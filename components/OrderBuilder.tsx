@@ -1,705 +1,1434 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from 'framer-motion';
+import {
+  AlertCircle,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  LogIn,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Sparkles,
+  Tag,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
+import { GoogleGenAI } from '@google/genai';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Check, Upload, Loader2, Sparkles, X, Calendar, ShoppingBag, ChevronDown, ChevronUp, Minus, Plus, Trash2, Tag, LogIn } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCart } from './CartContext';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { MediaPicker, type MediaItem } from './MediaPicker';
 import type { GroupedCartItem } from '../types';
-import { GoogleGenAI } from '@google/genai';
-
-// --- Types ---
+import { OrderBuilderStepper, type Step } from './OrderBuilderStepper';
+import { Button } from './ui/button';
+import { toast } from './ui/toaster';
 
 type UseCase = 'Company / Team' | 'Event' | 'Brand / Merch' | 'School / Club' | 'Other';
 type ServiceInterest = 'Upfront Bulk Order' | 'Merchandise Website';
 type Timeline = 'Flexible' | '2–3 weeks' | 'ASAP';
-type DecorationType = 'Screen print' | 'Embroidery' | 'DTG' | 'Not sure';
 
 interface OrderDraft {
-    useCase: UseCase | null;
-    serviceInterests: ServiceInterest[];
-    timeline: Timeline | null;
-    selectedDecorationTypes: DecorationType[];
-    logoPlacement: string;
-    wantsMockup: boolean | null;
-    logoMedia: MediaItem[];
-    mockupImageUrl: string | null;
-    mockupPrompt: string;
-    viewAngle: string;
-    aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
-    contact: {
-        email: string;
-        name: string;
-        company: string;
-    };
+  // 01 — Contact
+  contact: {
+    email: string;
+    name: string;
+    company: string;
+  };
+  // 02 — Brief
+  useCase: UseCase | null;
+  serviceInterests: ServiceInterest[];
+  timeline: Timeline | null;
+  logoPlacement: string;
+  // 04 — Logos (cart is 03)
+  logoMedia: MediaItem[];
+  mockupImageUrl: string | null;
+  mockupPrompt: string;
 }
 
-// --- Section wrapper ---
+const SECTION_IDS = {
+  contact: 'ob-contact',
+  brief: 'ob-brief',
+  cart: 'ob-cart',
+  logos: 'ob-logos',
+} as const;
 
-const Section: React.FC<{ number: string; title: string; children: React.ReactNode }> = ({ number, title, children }) => (
-    <div className="space-y-6">
-        <div className="flex items-baseline gap-3">
-            <span className="text-xs font-bold tracking-widest text-gray-300">{number}</span>
-            <h2 className="text-xl font-display font-bold text-lsl-black">{title}</h2>
-        </div>
-        <div className="border-t border-gray-100 pt-6">
-            {children}
-        </div>
-    </div>
-);
+// ─── Main ───
 
-// --- Chip (single-select option card) ---
+export const OrderBuilder: React.FC<{
+  className?: string;
+  onNavigateToMockup?: () => void;
+  onNavigateToContact?: () => void;
+  onNavigateToCatalog?: () => void;
+}> = ({ className, onNavigateToMockup, onNavigateToContact, onNavigateToCatalog }) => {
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
 
-const Chip: React.FC<{ selected: boolean; onClick: () => void; children: React.ReactNode }> = ({ selected, onClick, children }) => (
-    <button
-        onClick={onClick}
-        className={cn(
-            'px-6 py-3 rounded-2xl border-2 font-bold text-left transition-all',
-            selected
-                ? 'border-lsl-blue bg-blue-50/30 text-lsl-blue'
-                : 'border-gray-100 text-gray-700 hover:border-lsl-blue hover:bg-blue-50/20'
-        )}
-    >
-        {children}
-    </button>
-);
+  const {
+    getGroupedItems,
+    getCartTotal,
+    getCartCount,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+  } = useCart();
+  const { isAuthenticated, user, profile, organization, openAuthModal } = useAuth();
 
-// --- Pill toggle button ---
+  const groupedItems = getGroupedItems();
+  const cartTotal = getCartTotal();
+  const cartCount = getCartCount();
 
-const Pill: React.FC<{ selected: boolean; onClick: () => void; children: React.ReactNode }> = ({ selected, onClick, children }) => (
-    <button
-        onClick={onClick}
-        className={cn(
-            'px-5 py-2.5 rounded-full border-2 font-bold text-sm transition-all',
-            selected
-                ? 'bg-lsl-black text-white border-lsl-black'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-lsl-blue'
-        )}
-    >
-        {children}
-    </button>
-);
+  const defaultDraft: OrderDraft = {
+    contact: { email: '', name: '', company: '' },
+    useCase: null,
+    serviceInterests: [],
+    timeline: null,
+    logoPlacement: '',
+    logoMedia: [],
+    mockupImageUrl: null,
+    mockupPrompt: '',
+  };
 
-// --- Cart Item Card (collapsible) ---
+  const [draft, setDraft] = useState<OrderDraft>(defaultDraft);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [currentSection, setCurrentSection] = useState<string>(SECTION_IDS.contact);
 
-const CartItemCard: React.FC<{
-    group: GroupedCartItem;
-    onUpdateQuantity: (id: string, qty: number) => void;
-    onRemove: (id: string) => void;
-}> = ({ group, onUpdateQuantity, onRemove }) => {
-    const [expanded, setExpanded] = useState(false);
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
-    return (
-        <div className="bg-white rounded-2xl border-2 border-gray-100 overflow-hidden transition-all hover:border-gray-200">
-            {/* Collapsed header */}
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center gap-4 p-4 text-left"
-            >
-                {/* Thumbnail */}
-                <div className="relative w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden bg-white">
-                    {group.mockupUrl ? (
-                        <img src={group.mockupUrl} alt={group.productName} className="w-full h-full object-cover" />
-                    ) : group.image ? (
-                        <img src={group.image} alt={group.productName} className="w-full h-full object-contain p-1.5" />
-                    ) : (
-                        <ShoppingBag className="w-6 h-6 text-gray-300" />
-                    )}
-                    {group.mockupUrl && (
-                        <div className="absolute top-0 right-0 bg-white/80 backdrop-blur-sm rounded-bl-lg p-0.5">
-                            <Sparkles className="w-3 h-3 text-lsl-blue" />
-                        </div>
-                    )}
-                </div>
+  // Hydrate authenticated user info into the contact step.
+  useEffect(() => {
+    if (isAuthenticated && profile) {
+      setDraft((d) => ({
+        ...d,
+        contact: {
+          email: d.contact.email || profile.email || '',
+          name: d.contact.name || profile.full_name || '',
+          company: d.contact.company || organization?.name || '',
+        },
+      }));
+    }
+  }, [isAuthenticated, profile, organization]);
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                    <h3 className="font-display font-bold text-gray-900 truncate">{group.productName}</h3>
-                    <p className="text-xs text-gray-400 font-medium">
-                        SKU: {group.sku} · {group.category} · {group.variants.length} variant{group.variants.length !== 1 ? 's' : ''}
-                    </p>
-                </div>
+  // Hydrate from localStorage on mount.
+  useEffect(() => {
+    const saved = localStorage.getItem('lsl_order_draft_v2');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setDraft({ ...defaultDraft, ...parsed, logoMedia: [], mockupImageUrl: null });
+      } catch {
+        /* ignore */
+      }
+    }
+    // Also accept legacy v1 draft for one-shot migration.
+    const legacy = localStorage.getItem('lsl_order_draft');
+    if (legacy && !saved) {
+      try {
+        const parsed = JSON.parse(legacy);
+        setDraft((d) => ({
+          ...d,
+          contact: parsed.contact ?? d.contact,
+          useCase: parsed.useCase ?? null,
+          serviceInterests: parsed.serviceInterests ?? [],
+          timeline: parsed.timeline ?? null,
+        }));
+        localStorage.removeItem('lsl_order_draft');
+      } catch {
+        /* ignore */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-                {/* Summary */}
-                <div className="text-right shrink-0">
-                    <p className="font-display font-bold text-lsl-blue">${group.subtotal.toFixed(2)}</p>
-                    <p className="text-xs text-gray-400">{group.totalQuantity} items</p>
-                </div>
+  useEffect(() => {
+    const toSave = { ...draft, logoMedia: [], mockupImageUrl: null };
+    localStorage.setItem('lsl_order_draft_v2', JSON.stringify(toSave));
+  }, [draft]);
 
-                {/* Chevron */}
-                <div className="shrink-0 text-gray-300">
-                    {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </div>
-            </button>
-
-            {/* Expanded variant rows */}
-            {expanded && (
-                <div className="border-t border-gray-100 bg-gray-50/50">
-                    {/* Header row */}
-                    <div className="grid grid-cols-[1fr_1fr_120px_40px] gap-3 px-5 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-300">
-                        <span>Color</span>
-                        <span>Size</span>
-                        <span className="text-center">Qty</span>
-                        <span></span>
-                    </div>
-                    {group.variants.map((v) => (
-                        <div key={v.id} className="grid grid-cols-[1fr_1fr_120px_40px] gap-3 px-5 py-3 items-center border-t border-gray-100/80">
-                            <span className="text-sm font-medium text-gray-700 truncate">{v.color}</span>
-                            <span className="text-sm font-medium text-gray-700">{v.size}</span>
-                            <div className="flex items-center justify-center gap-1">
-                                <button
-                                    onClick={() => onUpdateQuantity(v.id, v.quantity - 1)}
-                                    className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:border-lsl-blue hover:text-lsl-blue transition-colors"
-                                >
-                                    <Minus size={12} />
-                                </button>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={v.quantity}
-                                    onChange={(e) => onUpdateQuantity(v.id, Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="w-12 h-7 text-center rounded-lg border border-gray-200 text-sm font-bold focus:border-lsl-blue focus:outline-none"
-                                />
-                                <button
-                                    onClick={() => onUpdateQuantity(v.id, v.quantity + 1)}
-                                    className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:border-lsl-blue hover:text-lsl-blue transition-colors"
-                                >
-                                    <Plus size={12} />
-                                </button>
-                            </div>
-                            <button
-                                onClick={() => onRemove(v.id)}
-                                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                            >
-                                <Trash2 size={14} />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
+  // IntersectionObserver to track which section is current for the stepper.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Pick the section that's most visible.
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) setCurrentSection(visible.target.id);
+      },
+      { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] },
     );
-};
+    Object.values(sectionRefs.current).forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
 
-// --- Main Component ---
+  const setRef = (id: string) => (el: HTMLElement | null) => {
+    sectionRefs.current[id] = el;
+  };
 
-export const OrderBuilder: React.FC<{ className?: string; onNavigateToMockup?: () => void; onNavigateToContact?: () => void; onNavigateToCatalog?: () => void }> = ({ className, onNavigateToMockup, onNavigateToContact, onNavigateToCatalog }) => {
-    const [isSubmitted, setIsSubmitted] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const { items: cartItems, getGroupedItems, getCartTotal, getCartCount, updateQuantity, removeFromCart, clearCart } = useCart();
-    const { isAuthenticated, user, profile, organization, openAuthModal } = useAuth();
+  // ─── Validation ───
 
-    const groupedItems = getGroupedItems();
-    const cartTotal = getCartTotal();
-    const cartCount = getCartCount();
+  const isValidEmail = useMemo(
+    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.contact.email.trim()),
+    [draft.contact.email],
+  );
+  const hasName = draft.contact.name.trim().length >= 2;
+  const hasCart = groupedItems.length > 0;
+  const hasBriefBasics = !!draft.useCase && !!draft.timeline;
 
-    const defaultDraft: OrderDraft = {
-        useCase: null,
-        serviceInterests: [],
-        timeline: null,
-        selectedDecorationTypes: [],
-        logoPlacement: '',
-        wantsMockup: null,
-        logoMedia: [],
-        mockupImageUrl: null,
-        mockupPrompt: '',
-        viewAngle: 'Front View',
-        aspectRatio: '1:1',
-        contact: { email: '', name: '', company: '' },
-    };
+  // Step state for the sticky stepper.
+  const stepperSteps: Step[] = useMemo(
+    () => [
+      {
+        id: SECTION_IDS.contact,
+        label: 'Contact',
+        state: getStepperState({
+          id: SECTION_IDS.contact,
+          isValid: isValidEmail && hasName,
+          hasError: submitAttempted && (!isValidEmail || !hasName),
+          current: currentSection,
+        }),
+      },
+      {
+        id: SECTION_IDS.brief,
+        label: 'Project',
+        state: getStepperState({
+          id: SECTION_IDS.brief,
+          isValid: hasBriefBasics,
+          hasError: submitAttempted && !hasBriefBasics,
+          current: currentSection,
+        }),
+      },
+      {
+        id: SECTION_IDS.cart,
+        label: 'Items',
+        state: getStepperState({
+          id: SECTION_IDS.cart,
+          isValid: hasCart,
+          hasError: submitAttempted && !hasCart,
+          current: currentSection,
+        }),
+      },
+      {
+        id: SECTION_IDS.logos,
+        label: 'Logos',
+        state: getStepperState({
+          id: SECTION_IDS.logos,
+          isValid: draft.logoMedia.length > 0,
+          hasError: false,
+          current: currentSection,
+        }),
+      },
+    ],
+    [
+      currentSection,
+      draft.logoMedia.length,
+      hasBriefBasics,
+      hasCart,
+      hasName,
+      isValidEmail,
+      submitAttempted,
+    ],
+  );
 
-    const [orderDraft, setOrderDraft] = useState<OrderDraft>(defaultDraft);
-    const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
+  const jumpToSection = (id: string) => {
+    const el = sectionRefs.current[id];
+    if (!el) return;
+    const offset = 140;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: 'smooth' });
+  };
 
-    // Persist draft to localStorage (excluding non-serializable fields)
-    useEffect(() => {
-        const saved = localStorage.getItem('lsl_order_draft');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                setOrderDraft({ ...defaultDraft, ...parsed, logoMedia: [], mockupImageUrl: null });
-            } catch (e) { console.error(e); }
-        }
-    }, []);
+  // ─── Draft helpers ───
 
-    useEffect(() => {
-        const toSave = { ...orderDraft, logoMedia: [], mockupImageUrl: null };
-        localStorage.setItem('lsl_order_draft', JSON.stringify(toSave));
-    }, [orderDraft]);
+  const updateDraft = (patch: Partial<OrderDraft>) =>
+    setDraft((prev) => ({ ...prev, ...patch }));
 
-    const updateDraft = (updates: Partial<OrderDraft>) => {
-        setOrderDraft(prev => ({ ...prev, ...updates }));
-    };
+  const updateContact = (patch: Partial<OrderDraft['contact']>) =>
+    setDraft((prev) => ({ ...prev, contact: { ...prev.contact, ...patch } }));
 
-    const toggleItem = (list: string[], item: string, key: 'serviceInterests' | 'selectedDecorationTypes') => {
-        const current = [...list];
-        if (current.includes(item)) {
-            updateDraft({ [key]: current.filter(i => i !== item) });
-        } else {
-            updateDraft({ [key]: [...current, item] });
-        }
-    };
+  const toggleService = (item: ServiceInterest) => {
+    setDraft((prev) => {
+      const has = prev.serviceInterests.includes(item);
+      return {
+        ...prev,
+        serviceInterests: has
+          ? prev.serviceInterests.filter((i) => i !== item)
+          : [...prev.serviceInterests, item],
+      };
+    });
+  };
 
-    const handleMediaSelect = (items: MediaItem[]) => {
-        // limit to 3 total
-        const remainingSlots = 3 - orderDraft.logoMedia.length;
-        if (remainingSlots <= 0) return;
-        const newItems = items.slice(0, remainingSlots);
-        updateDraft({ logoMedia: [...orderDraft.logoMedia, ...newItems] });
-    };
+  const handleMediaSelect = (items: MediaItem[]) => {
+    const remainingSlots = 3 - draft.logoMedia.length;
+    if (remainingSlots <= 0) return;
+    updateDraft({ logoMedia: [...draft.logoMedia, ...items.slice(0, remainingSlots)] });
+  };
 
-    const removeFile = (index: number) => {
-        const newMedia = [...orderDraft.logoMedia];
-        newMedia.splice(index, 1);
-        updateDraft({ logoMedia: newMedia });
-    };
+  const removeMediaAt = (index: number) => {
+    const next = [...draft.logoMedia];
+    next.splice(index, 1);
+    updateDraft({ logoMedia: next });
+  };
 
-    const handleSubmit = async () => {
-        if (!isAuthenticated || !organization) {
-            openAuthModal();
-            return;
-        }
+  // ─── Drag-and-drop logo upload (auth required, just opens MediaPicker if not) ───
 
-        setIsGenerating(true);
-        try {
-            // Include selected media item URLs
-            const fileUrls: string[] = [];
-            for (const media of orderDraft.logoMedia) {
-                const { data: urlData } = supabase.storage
-                    .from('organization-assets')
-                    .getPublicUrl(media.file_path);
-                fileUrls.push(urlData.publicUrl);
-            }
+  const onDropFiles = async (files: FileList | File[]) => {
+    setIsDragging(false);
+    if (!isAuthenticated || !organization) {
+      toast.info('Log in first', {
+        description: 'Sign in to upload logos directly. Your project draft is saved.',
+        action: { label: 'Log in', onClick: openAuthModal },
+      });
+      return;
+    }
+    const arr = Array.from(files);
+    const remainingSlots = 3 - draft.logoMedia.length;
+    if (remainingSlots <= 0) {
+      toast.warning('Logo limit reached', { description: 'Up to 3 logos per project.' });
+      return;
+    }
+    const toUpload = arr.slice(0, remainingSlots);
+    const uploadedIds: string[] = [];
+    for (const file of toUpload) {
+      const safeName = `${Date.now()}-${file.name.replace(/[^a-z0-9._-]+/gi, '_')}`;
+      const file_path = `${organization.id}/uploads/${safeName}`;
+      const { error } = await supabase.storage
+        .from('organization-assets')
+        .upload(file_path, file, { upsert: false });
+      if (error) {
+        toast.error('Upload failed', { description: error.message });
+        continue;
+      }
+      const item: MediaItem = {
+        id: file_path,
+        file_path,
+        file_name: file.name,
+        file_type: file.type,
+        size: file.size,
+        category: 'Brand Assets',
+        created_at: new Date().toISOString(),
+        uploader_id: user?.id ?? '',
+      };
+      uploadedIds.push(file_path);
+      updateDraft({ logoMedia: [...draft.logoMedia, item] });
+    }
+    if (uploadedIds.length) {
+      toast.success(`Uploaded ${uploadedIds.length} file${uploadedIds.length === 1 ? '' : 's'}`);
+    }
+  };
 
-            // Upload mockup if present
-            if (orderDraft.mockupImageUrl) {
-                try {
-                    const mockupRes = await fetch(orderDraft.mockupImageUrl);
-                    const blob = await mockupRes.blob();
-                    const safeName = `${Date.now()}-mockup.png`;
-                    const filePath = `order-attachments/${organization.id}/${safeName}`;
+  // ─── Submit ───
 
-                    const { error: uploadError } = await supabase.storage
-                        .from('leads-attachments')
-                        .upload(filePath, blob);
+  const handleSubmit = async () => {
+    setSubmitAttempted(true);
 
-                    if (!uploadError) {
-                        const { data: urlData } = supabase.storage
-                            .from('leads-attachments')
-                            .getPublicUrl(filePath);
-                        fileUrls.push(urlData.publicUrl);
-                    }
-                } catch (err) {
-                    console.warn('Mockup upload failed:', err);
-                }
-            }
-
-            // Build cart breakdown for order details
-            const cartBreakdown = groupedItems.map(g => ({
-                product: g.productName,
-                sku: g.sku,
-                category: g.category,
-                basePrice: g.basePrice,
-                totalQuantity: g.totalQuantity,
-                subtotal: g.subtotal,
-                variants: g.variants.map(v => ({
-                    color: v.color,
-                    size: v.size,
-                    quantity: v.quantity,
-                })),
-            }));
-
-            // Generate order name
-            const orderName = `${organization.name} - Website Order`;
-
-            // Build description from preferences
-            const descParts = [];
-            if (orderDraft.useCase) descParts.push(`Use case: ${orderDraft.useCase}`);
-            if (orderDraft.serviceInterests.length) descParts.push(`Services: ${orderDraft.serviceInterests.join(', ')}`);
-            if (orderDraft.timeline) descParts.push(`Timeline: ${orderDraft.timeline}`);
-            if (orderDraft.selectedDecorationTypes.length) descParts.push(`Decoration: ${orderDraft.selectedDecorationTypes.join(', ')}`);
-            if (orderDraft.logoPlacement) descParts.push(`Placement: ${orderDraft.logoPlacement}`);
-
-            // Generate AI Summary
-            let aiSummary = "";
-            try {
-                const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_FREE_GEMINI_API_KEY });
-                const prompt = `
-Please write a concise 2-3 sentence summary of this custom apparel order request.
-Organization: ${organization.name}
-Details:
-${descParts.join('\n')}
-Items Ordered:
-${cartBreakdown.map(g => `- ${g.totalQuantity}x ${g.product} (${g.category})`).join('\n')}
-                `;
-                const response = await ai.models.generateContent({
-                    model: 'gemini-3.1-flash-lite-preview',
-                    contents: prompt,
-                });
-                aiSummary = response.text || "";
-            } catch (err) {
-                console.error("Failed to generate AI summary:", err);
-            }
-
-            const orderData = {
-                organization_id: organization.id,
-                name: orderName,
-                status: 'pending',
-                timeline_step: 1,
-                price: cartTotal,
-                details: cartBreakdown,
-                description: descParts.join('\n'),
-                source: 'website',
-                submitted_by: user?.id,
-                attachments: fileUrls,
-                ai_summary: aiSummary,
-            };
-
-            const { error } = await supabase.from('orders').insert(orderData);
-
-            if (error) {
-                throw new Error(error.message);
-            }
-
-            // Webhook payload including user info
-            const webhookPayload = {
-                ...orderData,
-                organization_name: organization.name,
-                user_email: profile?.email,
-                user_name: profile?.full_name,
-            };
-
-            try {
-                const testUrl = "https://n8n.maxwellwarren.dev/webhook-test/76e4d8b0-e9eb-4dad-85e7-115c1d453a99";
-                const prodUrl = "https://n8n.maxwellwarren.dev/webhook/76e4d8b0-e9eb-4dad-85e7-115c1d453a99";
-
-                let res = await fetch(testUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(webhookPayload)
-                });
-
-                if (!res.ok) {
-                    await fetch(prodUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(webhookPayload)
-                    });
-                }
-            } catch (err) {
-                try {
-                    await fetch("https://n8n.maxwellwarren.dev/webhook/76e4d8b0-e9eb-4dad-85e7-115c1d453a99", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(webhookPayload)
-                    });
-                } catch (prodErr) {
-                    console.error("Webhook failed:", prodErr);
-                }
-            }
-
-            localStorage.removeItem('lsl_order_draft');
-            clearCart();
-            setIsSubmitted(true);
-        } catch (e: any) {
-            console.error('Submission failed', e);
-            alert(`Something went wrong: ${e.message || 'Please check your connection.'}`);
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    const isValidEmail = orderDraft.contact.email.includes('@') && orderDraft.contact.email.includes('.');
-
-    // --- Confirmation Screen ---
-    if (isSubmitted) {
-        return (
-            <div className={cn("min-h-screen bg-white pt-24 pb-20 px-4 md:px-8", className)}>
-                <div className="max-w-2xl mx-auto text-center space-y-8 pt-16">
-                    <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto">
-                        <Check size={40} strokeWidth={3} />
-                    </div>
-                    <h2 className="text-4xl font-display font-bold text-lsl-black">Request Received!</h2>
-                    <p className="text-gray-500 max-w-md mx-auto leading-relaxed">
-                        We've received your project details. Our team will review your requirements and follow up via email shortly with a formal quote and next steps.
-                    </p>
-                    <div className="grid gap-3 max-w-xs mx-auto">
-                        <button
-                            onClick={() => {
-                                setIsSubmitted(false);
-                                setOrderDraft(defaultDraft);
-                            }}
-                            className="w-full py-4 bg-lsl-black text-white rounded-2xl font-bold hover:shadow-lg transition-all"
-                        >
-                            Start New Order
-                        </button>
-                        <button
-                            onClick={onNavigateToContact}
-                            className="w-full py-4 bg-lsl-blue text-white rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                        >
-                            Schedule Live Design Call <Calendar size={18} />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
+    // Validation gate.
+    if (!isValidEmail) {
+      toast.error('Add your email', { description: 'We need it to send your quote.' });
+      jumpToSection(SECTION_IDS.contact);
+      return;
+    }
+    if (!hasName) {
+      toast.error('Add your name');
+      jumpToSection(SECTION_IDS.contact);
+      return;
+    }
+    if (!hasBriefBasics) {
+      toast.error('Tell us a little about the project', {
+        description: 'Pick a use case and a timeline.',
+      });
+      jumpToSection(SECTION_IDS.brief);
+      return;
+    }
+    if (!hasCart) {
+      toast.error('Your project has no items', {
+        description: 'Add at least one product from the catalog.',
+      });
+      jumpToSection(SECTION_IDS.cart);
+      return;
     }
 
-    // --- Form ---
+    setIsGenerating(true);
+    try {
+      // Resolve logo file URLs (already in organization-assets storage).
+      const fileUrls: string[] = [];
+      for (const media of draft.logoMedia) {
+        const { data: urlData } = supabase.storage
+          .from('organization-assets')
+          .getPublicUrl(media.file_path);
+        fileUrls.push(urlData.publicUrl);
+      }
+
+      // Upload mockup if present (existing flow).
+      if (draft.mockupImageUrl && organization) {
+        try {
+          const mockupRes = await fetch(draft.mockupImageUrl);
+          const blob = await mockupRes.blob();
+          const safeName = `${Date.now()}-mockup.png`;
+          const filePath = `order-attachments/${organization.id}/${safeName}`;
+          const { error: uploadError } = await supabase.storage
+            .from('leads-attachments')
+            .upload(filePath, blob);
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from('leads-attachments')
+              .getPublicUrl(filePath);
+            fileUrls.push(urlData.publicUrl);
+          }
+        } catch (err) {
+          console.warn('Mockup upload failed:', err);
+        }
+      }
+
+      // Build cart breakdown.
+      const cartBreakdown = groupedItems.map((g) => ({
+        product: g.productName,
+        sku: g.sku,
+        category: g.category,
+        basePrice: g.basePrice,
+        totalQuantity: g.totalQuantity,
+        subtotal: g.subtotal,
+        variants: g.variants.map((v) => ({
+          color: v.color,
+          size: v.size,
+          quantity: v.quantity,
+        })),
+      }));
+
+      // Build description.
+      const descParts: string[] = [];
+      if (draft.useCase) descParts.push(`Use case: ${draft.useCase}`);
+      if (draft.serviceInterests.length)
+        descParts.push(`Services: ${draft.serviceInterests.join(', ')}`);
+      if (draft.timeline) descParts.push(`Timeline: ${draft.timeline}`);
+      if (draft.logoPlacement) descParts.push(`Placement: ${draft.logoPlacement}`);
+
+      // Generate AI summary (best-effort; failure does not block submit).
+      let aiSummary = '';
+      try {
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_FREE_GEMINI_API_KEY });
+        const prompt = `
+Write a concise 2-3 sentence summary of this custom apparel order request.
+Organization: ${organization?.name ?? draft.contact.company ?? 'Guest project'}
+Details:
+${descParts.join('\n')}
+Items:
+${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`).join('\n')}`;
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite-preview',
+          contents: prompt,
+        });
+        aiSummary = response.text || '';
+      } catch (err) {
+        console.error('Failed to generate AI summary:', err);
+      }
+
+      const orderName = `${
+        organization?.name || draft.contact.company || draft.contact.name
+      } - Website Order`;
+
+      const isGuest = !isAuthenticated || !organization;
+
+      // Authenticated path inserts an order; guest path posts a lead row through n8n.
+      let createdOrderId: string | null = null;
+      if (!isGuest && organization) {
+        const orderData = {
+          organization_id: organization.id,
+          name: orderName,
+          status: 'pending',
+          timeline_step: 1,
+          price: cartTotal,
+          details: cartBreakdown,
+          description: descParts.join('\n'),
+          source: 'website',
+          submitted_by: user?.id,
+          attachments: fileUrls,
+          ai_summary: aiSummary,
+        };
+
+        const { data: insert, error } = await supabase
+          .from('orders')
+          .insert(orderData)
+          .select('id')
+          .single();
+        if (error) throw new Error(error.message);
+        createdOrderId = insert?.id ?? null;
+      }
+
+      // Webhook payload (carries everything n8n needs, including guest leads).
+      const webhookPayload = {
+        is_guest: isGuest,
+        order_id: createdOrderId,
+        organization_id: organization?.id ?? null,
+        organization_name: organization?.name ?? draft.contact.company ?? null,
+        contact: draft.contact,
+        name: orderName,
+        status: 'pending',
+        timeline_step: 1,
+        price: cartTotal,
+        details: cartBreakdown,
+        description: descParts.join('\n'),
+        source: 'website',
+        submitted_by: user?.id ?? null,
+        user_email: profile?.email ?? draft.contact.email,
+        user_name: profile?.full_name ?? draft.contact.name,
+        attachments: fileUrls,
+        ai_summary: aiSummary,
+      };
+
+      try {
+        const testUrl =
+          'https://n8n.maxwellwarren.dev/webhook-test/76e4d8b0-e9eb-4dad-85e7-115c1d453a99';
+        const prodUrl =
+          'https://n8n.maxwellwarren.dev/webhook/76e4d8b0-e9eb-4dad-85e7-115c1d453a99';
+        const res = await fetch(testUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(webhookPayload),
+        });
+        if (!res.ok) {
+          await fetch(prodUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(webhookPayload),
+          });
+        }
+      } catch (err) {
+        try {
+          await fetch(
+            'https://n8n.maxwellwarren.dev/webhook/76e4d8b0-e9eb-4dad-85e7-115c1d453a99',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(webhookPayload),
+            },
+          );
+        } catch (prodErr) {
+          console.error('Webhook failed:', prodErr);
+        }
+      }
+
+      localStorage.removeItem('lsl_order_draft_v2');
+      clearCart();
+      setSubmittedOrderId(createdOrderId);
+      setIsSubmitted(true);
+    } catch (e: any) {
+      console.error('Submission failed', e);
+      toast.error('Something went wrong', {
+        description: e?.message ?? 'Please check your connection and try again.',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // ─── Render ───
+
+  if (isSubmitted) {
     return (
-        <>
-        <div className={cn("min-h-screen bg-white pt-24 pb-20 px-4 md:px-8", className)}>
-            <div className="max-w-2xl mx-auto space-y-16">
-
-                {/* Header */}
-                <div>
-                    <h1 className="text-4xl font-display font-bold text-lsl-black">Build Your Order</h1>
-                    <p className="text-gray-400 mt-2">Fill out what you know — our team will handle the rest.</p>
-                </div>
-
-                {/* 01 — What's This For */}
-                <Section number="01" title="What's this for?">
-                    <div className="space-y-6">
-                        <div className="space-y-3">
-                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Use Case</p>
-                            <div className="flex flex-wrap gap-3">
-                                {(['Company / Team', 'Event', 'Brand / Merch', 'School / Club', 'Other'] as UseCase[]).map(opt => (
-                                    <Chip
-                                        key={opt}
-                                        selected={orderDraft.useCase === opt}
-                                        onClick={() => updateDraft({ useCase: opt })}
-                                    >
-                                        {opt}
-                                    </Chip>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Service (select all that apply)</p>
-                            <div className="grid gap-3">
-                                {([
-                                    { value: 'Upfront Bulk Order', desc: 'Standard production run for your team or event' },
-                                    { value: 'Merchandise Website', desc: 'Setup a custom store for your fans or employees to buy directly' },
-                                ] as { value: ServiceInterest; desc: string }[]).map(opt => (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => toggleItem(orderDraft.serviceInterests, opt.value, 'serviceInterests')}
-                                        className={cn(
-                                            'w-full text-left p-5 rounded-2xl border-2 transition-all flex items-center gap-4',
-                                            orderDraft.serviceInterests.includes(opt.value)
-                                                ? 'border-lsl-blue bg-blue-50/30'
-                                                : 'border-gray-100 hover:border-lsl-blue hover:bg-blue-50/20'
-                                        )}
-                                    >
-                                        <div className={cn(
-                                            'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
-                                            orderDraft.serviceInterests.includes(opt.value) ? 'border-lsl-blue bg-lsl-blue' : 'border-gray-200'
-                                        )}>
-                                            {orderDraft.serviceInterests.includes(opt.value) && <Check size={12} className="text-white" />}
-                                        </div>
-                                        <div>
-                                            <span className="font-bold text-gray-800 block">{opt.value}</span>
-                                            <span className="text-sm text-gray-400">{opt.desc}</span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Timeline</p>
-                            <div className="flex flex-wrap gap-3">
-                                {(['Flexible', '2–3 weeks', 'ASAP'] as Timeline[]).map(opt => (
-                                    <Chip
-                                        key={opt}
-                                        selected={orderDraft.timeline === opt}
-                                        onClick={() => updateDraft({ timeline: opt })}
-                                    >
-                                        {opt}
-                                    </Chip>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </Section>
-
-                {/* 02 — Your Items (Cart) */}
-                <Section number="02" title="Your Items">
-                    {groupedItems.length === 0 ? (
-                        <div className="text-center py-12 space-y-4">
-                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
-                                <ShoppingBag className="w-8 h-8 text-gray-300" />
-                            </div>
-                            <div>
-                                <h3 className="font-display font-bold text-gray-400 text-lg">Your cart is empty</h3>
-                                <p className="text-sm text-gray-400 mt-1">Browse our catalog to add products to your order.</p>
-                            </div>
-                            {onNavigateToCatalog && (
-                                <button
-                                    onClick={onNavigateToCatalog}
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-lsl-blue text-white rounded-full font-bold text-sm hover:bg-lsl-black transition-all"
-                                >
-                                    <Tag size={16} />
-                                    Browse Catalog
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {groupedItems.map(group => (
-                                <CartItemCard
-                                    key={group.productId}
-                                    group={group}
-                                    onUpdateQuantity={updateQuantity}
-                                    onRemove={removeFromCart}
-                                />
-                            ))}
-                            {/* Cart summary bar */}
-                            <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-5 py-4 border border-gray-100">
-                                <div>
-                                    <span className="text-sm font-bold text-gray-500">{cartCount} items</span>
-                                    {onNavigateToCatalog && (
-                                        <button onClick={onNavigateToCatalog} className="text-sm text-lsl-blue font-bold ml-3 hover:underline">
-                                            + Add more
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">Est. Total</span>
-                                    <p className="text-xl font-display font-bold text-lsl-blue">${cartTotal.toFixed(2)}</p>
-                                </div>
-                            </div>
-
-                            {/* SS Activewear Callout - moved here */}
-                            <div className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 flex items-start gap-3 mt-4">
-                                <ShoppingBag className="text-lsl-blue shrink-0 mt-0.5" size={18} />
-                                <p className="text-sm text-gray-500 leading-relaxed">
-                                    We use <a href="https://www.ssactivewear.com/" target="_blank" rel="noopener noreferrer" className="text-lsl-blue font-bold hover:underline">SS Activewear</a> as our primary supplier. Any item available on their site can be ordered through us.
-                                </p>
-                            </div>
-                        </div>
-                    )}
-                </Section>
-
-                {/* 03 — Logos */}
-                <Section number="03" title="Upload Your Logos">
-                    <div className="space-y-4">
-                        <p className="text-sm text-gray-500">Upload up to 3 logo files. PNG or SVG preferred.</p>
-                        <div className="grid grid-cols-3 gap-4">
-                            {orderDraft.logoMedia.map((media, i) => (
-                                <div key={i} className="relative aspect-square bg-white rounded-xl border border-gray-200 p-2 flex items-center justify-center overflow-hidden">
-                                    <StoragePreviewImage path={media.file_path} alt={media.file_name} />
-                                    <button
-                                        onClick={() => removeFile(i)}
-                                        className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1 hover:bg-red-200 z-10"
-                                    >
-                                        <X size={12} />
-                                    </button>
-                                </div>
-                            ))}
-                            {orderDraft.logoMedia.length < 3 && (
-                                <button
-                                    onClick={() => setIsMediaPickerOpen(true)}
-                                    className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:border-lsl-blue hover:text-lsl-blue hover:bg-blue-50/10 transition-all"
-                                >
-                                    <Upload size={22} />
-                                    <span className="text-xs font-bold mt-2">Add Media</span>
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="bg-blue-50/50 rounded-2xl p-5 flex items-start gap-3 border border-blue-100">
-                            <Sparkles size={18} className="text-lsl-blue shrink-0 mt-0.5" />
-                            <div>
-                                <p className="font-bold text-lsl-blue text-sm">Want to preview your logo on a product?</p>
-                                <p className="text-sm text-gray-500 mt-0.5">Try our Mockup Studio to visualize before ordering.</p>
-                                <button
-                                    onClick={() => onNavigateToMockup && onNavigateToMockup()}
-                                    className="text-sm font-bold text-lsl-blue hover:underline mt-1"
-                                >
-                                    Open Mockup Studio &rarr;
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </Section>
-
-                {/* 04 — Account Info */}
-                <Section number="04" title="Your Account">
-                    {isAuthenticated && profile ? (
-                        <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-2">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-lsl-blue flex items-center justify-center">
-                                    <span className="text-white font-bold text-sm">{profile.full_name?.charAt(0) || '?'}</span>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-gray-900">{profile.full_name}</p>
-                                    <p className="text-sm text-gray-400">{profile.email}</p>
-                                </div>
-                            </div>
-                            {organization && (
-                                <p className="text-sm text-gray-500 pl-[52px]">Org: <span className="font-semibold">{organization.name}</span></p>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 space-y-4">
-                            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
-                                <LogIn className="w-8 h-8 text-lsl-blue" />
-                            </div>
-                            <div>
-                                <h3 className="font-display font-bold text-gray-700 text-lg">Log in to submit your order</h3>
-                                <p className="text-sm text-gray-400 mt-1">Create a free account to track orders and manage your projects.</p>
-                            </div>
-                            <button
-                                onClick={openAuthModal}
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-lsl-blue text-white rounded-full font-bold text-sm hover:bg-lsl-black transition-all"
-                            >
-                                <LogIn size={16} />
-                                Log In / Sign Up
-                            </button>
-                        </div>
-                    )}
-                </Section>
-
-                {/* Submit */}
-                <button
-                    disabled={!isAuthenticated || !organization || isGenerating}
-                    onClick={handleSubmit}
-                    className="w-full py-5 bg-lsl-blue text-white rounded-2xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
-                >
-                    {isGenerating ? <Loader2 className="animate-spin" size={20} /> : !isAuthenticated ? 'Log in to Submit' : 'Submit Order'}
-                </button>
-
-            </div>
-        </div>
-        
-        <MediaPicker
-            isOpen={isMediaPickerOpen}
-            onClose={() => setIsMediaPickerOpen(false)}
-            onSelect={handleMediaSelect}
-            multiple={true}
-            defaultCategory="Brand Assets"
-            title="Select Media"
-        />
-        </>
+      <SuccessScreen
+        email={draft.contact.email || profile?.email}
+        orderId={submittedOrderId}
+        onNewOrder={() => {
+          setIsSubmitted(false);
+          setDraft(defaultDraft);
+          setTouched({});
+          setSubmitAttempted(false);
+          setSubmittedOrderId(null);
+        }}
+        onScheduleCall={onNavigateToContact}
+      />
     );
+  }
+
+  return (
+    <>
+      <div
+        className={cn('min-h-screen bg-lsl-cream pt-20 pb-24 md:pt-24', className)}
+      >
+        <div className="mx-auto max-w-3xl px-6 md:px-10">
+          <header className="mb-8 md:mb-10">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+              Order Builder
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-lsl-ink md:text-5xl">
+              Build your project.
+            </h1>
+            <p className="mt-3 max-w-xl text-base leading-relaxed text-lsl-graphite">
+              Tell us what you need, drop in your logos, and we&apos;ll send a proof and a quote — usually same day.
+            </p>
+          </header>
+
+          <OrderBuilderStepper steps={stepperSteps} onJump={jumpToSection} />
+
+          <div className="mt-10 space-y-16">
+            {/* ── 01 — Contact (moved to top) ── */}
+            <Section
+              ref={setRef(SECTION_IDS.contact)}
+              id={SECTION_IDS.contact}
+              number="01"
+              title="How can we reach you?"
+              subtitle="No spam. We use this only for proofs, the quote, and your invoice."
+            >
+              {isAuthenticated && profile ? (
+                <SignedInBlock
+                  profile={profile}
+                  organization={organization}
+                />
+              ) : (
+                <div className="mb-4 rounded-xl border border-lsl-stone bg-white p-4">
+                  <p className="text-sm text-lsl-graphite">
+                    Continuing as a guest is fine — or{' '}
+                    <button
+                      type="button"
+                      onClick={openAuthModal}
+                      className="font-medium text-lsl-navy underline-offset-4 hover:underline"
+                    >
+                      log in
+                    </button>{' '}
+                    to save this project to your portal.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Email"
+                  required
+                  error={
+                    (touched.email || submitAttempted) && !isValidEmail
+                      ? 'Enter a valid email address'
+                      : undefined
+                  }
+                >
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={draft.contact.email}
+                    onChange={(e) => updateContact({ email: e.target.value })}
+                    onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                    placeholder="you@company.com"
+                    className={inputClass(
+                      (touched.email || submitAttempted) && !isValidEmail,
+                    )}
+                  />
+                </Field>
+                <Field
+                  label="Full name"
+                  required
+                  error={
+                    (touched.name || submitAttempted) && !hasName
+                      ? 'Tell us what to call you'
+                      : undefined
+                  }
+                >
+                  <input
+                    type="text"
+                    autoComplete="name"
+                    value={draft.contact.name}
+                    onChange={(e) => updateContact({ name: e.target.value })}
+                    onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                    placeholder="Jane Smith"
+                    className={inputClass(
+                      (touched.name || submitAttempted) && !hasName,
+                    )}
+                  />
+                </Field>
+                <Field
+                  label="Company / Organization"
+                  hint="Optional"
+                  className="md:col-span-2"
+                >
+                  <input
+                    type="text"
+                    autoComplete="organization"
+                    value={draft.contact.company}
+                    onChange={(e) => updateContact({ company: e.target.value })}
+                    placeholder="Westview High Athletics"
+                    className={inputClass(false)}
+                  />
+                </Field>
+              </div>
+            </Section>
+
+            {/* ── 02 — Brief ── */}
+            <Section
+              ref={setRef(SECTION_IDS.brief)}
+              id={SECTION_IDS.brief}
+              number="02"
+              title="A bit about the project"
+              subtitle="Helps us prep the right proofs and pricing before the call."
+            >
+              <Field
+                label="Use case"
+                required
+                error={
+                  submitAttempted && !draft.useCase
+                    ? 'Pick the closest match'
+                    : undefined
+                }
+              >
+                <ChipGroup
+                  options={['Company / Team', 'Event', 'Brand / Merch', 'School / Club', 'Other']}
+                  value={draft.useCase}
+                  onChange={(v) => updateDraft({ useCase: v as UseCase })}
+                />
+              </Field>
+
+              <Field label="What do you need from us?" hint="Pick any that apply">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(
+                    [
+                      {
+                        value: 'Upfront Bulk Order',
+                        desc: 'A single production run for your team or event.',
+                      },
+                      {
+                        value: 'Merchandise Website',
+                        desc: 'A custom store for fans / employees to buy direct.',
+                      },
+                    ] as { value: ServiceInterest; desc: string }[]
+                  ).map((opt) => {
+                    const checked = draft.serviceInterests.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => toggleService(opt.value)}
+                        aria-pressed={checked}
+                        className={cn(
+                          'group flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-all',
+                          checked
+                            ? 'border-lsl-navy bg-lsl-navy-50 shadow-lsl-card'
+                            : 'border-lsl-stone bg-white hover:border-lsl-ink/40',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center rounded-md border-2 transition-colors',
+                            checked
+                              ? 'border-lsl-navy bg-lsl-navy text-lsl-cream'
+                              : 'border-lsl-stone bg-white',
+                          )}
+                        >
+                          {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-display text-base font-semibold text-lsl-ink">
+                            {opt.value}
+                          </span>
+                          <span className="mt-0.5 block text-sm text-lsl-graphite">
+                            {opt.desc}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+
+              <Field
+                label="Timeline"
+                required
+                error={
+                  submitAttempted && !draft.timeline
+                    ? 'Give us a rough timeline'
+                    : undefined
+                }
+              >
+                <ChipGroup
+                  options={['Flexible', '2–3 weeks', 'ASAP']}
+                  value={draft.timeline}
+                  onChange={(v) => updateDraft({ timeline: v as Timeline })}
+                />
+              </Field>
+
+              <Field
+                label="Logo placement notes"
+                hint="Optional · e.g. left chest + back, hat front, sleeve"
+              >
+                <input
+                  type="text"
+                  value={draft.logoPlacement}
+                  onChange={(e) => updateDraft({ logoPlacement: e.target.value })}
+                  placeholder="Left chest, full back, etc."
+                  className={inputClass(false)}
+                />
+              </Field>
+            </Section>
+
+            {/* ── 03 — Items ── */}
+            <Section
+              ref={setRef(SECTION_IDS.cart)}
+              id={SECTION_IDS.cart}
+              number="03"
+              title="Your items"
+              subtitle="Estimated subtotal — final pricing confirmed after we review your logos."
+              error={
+                submitAttempted && !hasCart
+                  ? 'Add at least one item to continue.'
+                  : undefined
+              }
+            >
+              {groupedItems.length === 0 ? (
+                <EmptyCart onNavigateToCatalog={onNavigateToCatalog} />
+              ) : (
+                <div className="space-y-3">
+                  {groupedItems.map((group) => (
+                    <CartItemCard
+                      key={group.productId}
+                      group={group}
+                      onUpdateQuantity={updateQuantity}
+                      onRemove={removeFromCart}
+                    />
+                  ))}
+                  <div className="flex items-center justify-between rounded-2xl border border-lsl-stone bg-white px-5 py-4">
+                    <div className="text-sm">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+                        {cartCount} items
+                      </span>
+                      {onNavigateToCatalog && (
+                        <button
+                          type="button"
+                          onClick={onNavigateToCatalog}
+                          className="ml-3 text-sm font-medium text-lsl-navy underline-offset-4 hover:underline"
+                        >
+                          + Add more
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+                        Est. total
+                      </p>
+                      <p className="font-display text-2xl font-semibold tabular-nums text-lsl-ink">
+                        ${cartTotal.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="rounded-xl border border-lsl-stone bg-lsl-stone/30 px-4 py-3 text-xs leading-relaxed text-lsl-graphite">
+                    Primary supplier:{' '}
+                    <a
+                      href="https://www.ssactivewear.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-lsl-navy underline-offset-4 hover:underline"
+                    >
+                      SS Activewear
+                    </a>
+                    . Anything in their catalog is fair game — just tell us in the brief or on the call.
+                  </p>
+                </div>
+              )}
+            </Section>
+
+            {/* ── 04 — Logos ── */}
+            <Section
+              ref={setRef(SECTION_IDS.logos)}
+              id={SECTION_IDS.logos}
+              number="04"
+              title="Your logos"
+              subtitle="Up to 3 files. Vector (SVG, PDF, AI) preferred; high-res PNG is fine."
+            >
+              <div
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  onDropFiles(e.dataTransfer.files);
+                }}
+                className={cn(
+                  'rounded-2xl border-2 border-dashed transition-colors',
+                  isDragging
+                    ? 'border-lsl-navy bg-lsl-navy-50'
+                    : 'border-lsl-stone bg-white',
+                )}
+              >
+                <div className="grid grid-cols-3 gap-3 p-3">
+                  {draft.logoMedia.map((media, i) => (
+                    <LogoSlot key={i} media={media} onRemove={() => removeMediaAt(i)} />
+                  ))}
+                  {draft.logoMedia.length < 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsMediaPickerOpen(true)}
+                      className="grid aspect-square place-items-center gap-2 rounded-xl border-2 border-dashed border-lsl-stone text-lsl-graphite transition-all hover:border-lsl-navy hover:bg-lsl-navy-50 hover:text-lsl-navy"
+                    >
+                      <Upload className="h-5 w-5" strokeWidth={1.75} />
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em]">
+                        Add logo
+                      </span>
+                    </button>
+                  )}
+                </div>
+                <p className="px-4 pb-3 text-center text-xs text-lsl-graphite">
+                  Drag &amp; drop files here, or use the slot above.
+                </p>
+              </div>
+
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-lsl-stone bg-lsl-stone/30 px-4 py-4">
+                <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-lsl-thread" strokeWidth={1.75} />
+                <div>
+                  <p className="text-sm font-medium text-lsl-ink">
+                    Want a preview before we build a proof?
+                  </p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-lsl-graphite">
+                    Open the Mockup Studio to see your logo on a product. Anything you generate auto-attaches to this project when you come back.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToMockup?.()}
+                    className="mt-2 text-sm font-medium text-lsl-navy underline-offset-4 hover:underline"
+                  >
+                    Open Mockup Studio →
+                  </button>
+                </div>
+              </div>
+            </Section>
+
+            {/* ── Submit ── */}
+            <div className="space-y-3">
+              <Button
+                onClick={handleSubmit}
+                disabled={isGenerating}
+                size="xl"
+                className="w-full"
+                variant="primary"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} /> Submitting…
+                  </>
+                ) : (
+                  <>Send my project</>
+                )}
+              </Button>
+              <p className="text-center text-xs text-lsl-graphite">
+                By submitting, you agree to be contacted about this project. No charges until you approve a proof.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <MediaPicker
+        isOpen={isMediaPickerOpen}
+        onClose={() => setIsMediaPickerOpen(false)}
+        onSelect={handleMediaSelect}
+        multiple
+        defaultCategory="Brand Assets"
+        title="Select Media"
+      />
+    </>
+  );
 };
 
-// Helper component
-function StoragePreviewImage({ path, alt }: { path: string, alt?: string }) {
-    const [url, setUrl] = useState<string | null>(null);
+// ─── Sub-components ───
 
-    useEffect(() => {
-        const getUrl = async () => {
-            const { data } = await supabase.storage.from('organization-assets').createSignedUrl(path, 3600);
-            if (data?.signedUrl) setUrl(data.signedUrl);
-        };
-        getUrl();
-    }, [path]);
+interface SectionProps {
+  number: string;
+  title: string;
+  subtitle?: string;
+  error?: string;
+  id: string;
+  children: React.ReactNode;
+}
 
-    if (!url) return <div className="h-full w-full flex items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-300" /></div>;
+const Section = React.forwardRef<HTMLElement, SectionProps>(function Section(
+  { number, title, subtitle, error, id, children },
+  ref,
+) {
+  return (
+    <section
+      ref={ref}
+      id={id}
+      aria-labelledby={`${id}-title`}
+      className="scroll-mt-40"
+    >
+      <header className="mb-5 flex items-baseline gap-3">
+        <span className="font-mono text-[11px] tabular-nums uppercase tracking-[0.22em] text-lsl-navy">
+          {number}
+        </span>
+        <h2
+          id={`${id}-title`}
+          className="font-display text-2xl font-semibold tracking-tight text-lsl-ink"
+        >
+          {title}
+        </h2>
+      </header>
+      {subtitle && (
+        <p className="mb-6 -mt-3 text-sm text-lsl-graphite">{subtitle}</p>
+      )}
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4" strokeWidth={2} />
+          <span>{error}</span>
+        </div>
+      )}
+      <div className="space-y-5">{children}</div>
+    </section>
+  );
+});
 
-    return <img src={url} className="w-full h-full object-contain" alt={alt || "Preview"} />;
+function Field({
+  label,
+  required,
+  hint,
+  error,
+  className,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={cn('block', className)}>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+          {label}
+          {required && <span className="ml-1 text-red-500">*</span>}
+        </span>
+        {hint && !error && (
+          <span className="text-[11px] text-lsl-graphite/70">{hint}</span>
+        )}
+      </div>
+      {children}
+      {error && (
+        <p
+          role="alert"
+          className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-600"
+        >
+          <AlertCircle className="h-3 w-3" strokeWidth={2.5} /> {error}
+        </p>
+      )}
+    </label>
+  );
+}
+
+function ChipGroup({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string | null;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => {
+        const selected = value === opt;
+        return (
+          <button
+            type="button"
+            key={opt}
+            onClick={() => onChange(opt)}
+            aria-pressed={selected}
+            className={cn(
+              'rounded-full border px-4 py-2 text-sm font-medium transition-all',
+              selected
+                ? 'border-lsl-navy bg-lsl-navy text-lsl-cream shadow-lsl-card'
+                : 'border-lsl-stone bg-white text-lsl-ink hover:border-lsl-ink',
+            )}
+          >
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function inputClass(hasError: boolean) {
+  return cn(
+    'w-full rounded-xl border bg-white px-4 py-3 text-base text-lsl-ink placeholder:text-lsl-graphite/60 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-lsl-cream',
+    hasError
+      ? 'border-red-400 focus:border-red-500 focus:ring-red-500/30'
+      : 'border-lsl-stone focus:border-lsl-navy focus:ring-lsl-navy/30',
+  );
+}
+
+function SignedInBlock({
+  profile,
+  organization,
+}: {
+  profile: any;
+  organization: any;
+}) {
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-xl border border-lsl-stone bg-white p-4">
+      <div className="grid h-10 w-10 place-items-center rounded-full bg-lsl-navy text-lsl-cream">
+        <span className="text-sm font-semibold">
+          {(profile.full_name?.charAt(0) || '?').toUpperCase()}
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-lsl-ink">
+          {profile.full_name}
+        </p>
+        <p className="truncate text-xs text-lsl-graphite">{profile.email}</p>
+      </div>
+      {organization && (
+        <span className="hidden text-right text-xs text-lsl-graphite md:block">
+          {organization.name}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function EmptyCart({
+  onNavigateToCatalog,
+}: {
+  onNavigateToCatalog?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-lsl-stone bg-white px-6 py-10 text-center">
+      <div className="grid h-14 w-14 place-items-center rounded-full bg-lsl-stone/60 text-lsl-graphite">
+        <ShoppingBag className="h-6 w-6" strokeWidth={1.5} />
+      </div>
+      <div>
+        <p className="font-display text-lg font-semibold text-lsl-ink">
+          No items yet
+        </p>
+        <p className="mt-1 text-sm text-lsl-graphite">
+          Add at least one product from the catalog to continue.
+        </p>
+      </div>
+      {onNavigateToCatalog && (
+        <Button
+          variant="primary"
+          size="md"
+          onClick={onNavigateToCatalog}
+          className="mt-1"
+        >
+          <Tag className="h-4 w-4" strokeWidth={1.75} />
+          Browse the catalog
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function CartItemCard({
+  group,
+  onUpdateQuantity,
+  onRemove,
+}: {
+  group: GroupedCartItem;
+  onUpdateQuantity: (id: string, qty: number) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-lsl-stone bg-white">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-lsl-cream/40"
+      >
+        <div className="relative grid h-14 w-14 flex-shrink-0 place-items-center overflow-hidden rounded-xl bg-lsl-stone">
+          {group.mockupUrl ? (
+            <img
+              src={group.mockupUrl}
+              alt={group.productName}
+              className="h-full w-full object-cover"
+            />
+          ) : group.image ? (
+            <img
+              src={group.image}
+              alt={group.productName}
+              className="h-full w-full object-contain p-1.5"
+            />
+          ) : (
+            <ShoppingBag className="h-6 w-6 text-lsl-graphite" strokeWidth={1.5} />
+          )}
+          {group.mockupUrl && (
+            <div className="absolute right-0 top-0 rounded-bl-lg bg-white/85 p-0.5 backdrop-blur-sm">
+              <Sparkles className="h-3 w-3 text-lsl-thread" strokeWidth={2} />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-display text-base font-semibold text-lsl-ink">
+            {group.productName}
+          </h3>
+          <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+            {group.sku} · {group.category} · {group.variants.length} variant
+            {group.variants.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <p className="font-display text-base font-semibold tabular-nums text-lsl-ink">
+            ${group.subtotal.toFixed(2)}
+          </p>
+          <p className="text-xs text-lsl-graphite tabular-nums">
+            {group.totalQuantity} items
+          </p>
+        </div>
+        <div className="flex-shrink-0 text-lsl-graphite">
+          {expanded ? (
+            <ChevronUp className="h-4 w-4" strokeWidth={1.75} />
+          ) : (
+            <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+          )}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-lsl-stone bg-lsl-cream/40">
+          <div className="grid grid-cols-[1fr_1fr_140px_44px] gap-3 px-5 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+            <span>Color</span>
+            <span>Size</span>
+            <span className="text-center">Qty</span>
+            <span aria-hidden="true" />
+          </div>
+          {group.variants.map((v) => (
+            <div
+              key={v.id}
+              className="grid grid-cols-[1fr_1fr_140px_44px] items-center gap-3 border-t border-lsl-stone/60 px-5 py-3"
+            >
+              <span className="truncate text-sm text-lsl-ink">{v.color}</span>
+              <span className="text-sm text-lsl-ink">{v.size}</span>
+              <div className="flex items-center justify-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onUpdateQuantity(v.id, v.quantity - 1)}
+                  disabled={v.quantity <= 1}
+                  aria-label="Decrease quantity"
+                  className="grid h-9 w-9 place-items-center rounded-md border border-lsl-stone text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink disabled:opacity-40"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={v.quantity}
+                  onChange={(e) =>
+                    onUpdateQuantity(
+                      v.id,
+                      Math.max(1, parseInt(e.target.value || '1', 10)),
+                    )
+                  }
+                  className="h-9 w-12 rounded-md border border-lsl-stone bg-white text-center font-mono text-sm tabular-nums text-lsl-ink focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
+                />
+                <button
+                  type="button"
+                  onClick={() => onUpdateQuantity(v.id, v.quantity + 1)}
+                  aria-label="Increase quantity"
+                  className="grid h-9 w-9 place-items-center rounded-md border border-lsl-stone text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemove(v.id)}
+                aria-label="Remove variant"
+                className="grid h-9 w-9 place-items-center rounded-md text-lsl-graphite transition-colors hover:bg-red-50 hover:text-red-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LogoSlot({
+  media,
+  onRemove,
+}: {
+  media: MediaItem;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="relative aspect-square overflow-hidden rounded-xl border border-lsl-stone bg-white p-2">
+      <StoragePreviewImage path={media.file_path} alt={media.file_name} />
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${media.file_name}`}
+        className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-lsl-ink text-lsl-cream shadow-lsl-card transition-transform hover:scale-110"
+      >
+        <X className="h-3 w-3" strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+function SuccessScreen({
+  email,
+  orderId,
+  onNewOrder,
+  onScheduleCall,
+}: {
+  email?: string;
+  orderId?: string | null;
+  onNewOrder: () => void;
+  onScheduleCall?: () => void;
+}) {
+  const reducedMotion = useReducedMotion();
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-lsl-cream pt-28 pb-20">
+      {!reducedMotion && <Confetti />}
+      <div className="relative mx-auto max-w-xl px-6 text-center">
+        <motion.div
+          initial={{ scale: 0, rotate: -12 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+          className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-lsl-navy text-lsl-cream shadow-lsl-lift"
+        >
+          <Check className="h-9 w-9" strokeWidth={2.5} />
+        </motion.div>
+        <h2 className="mt-8 font-display text-4xl font-semibold tracking-tight text-lsl-ink">
+          Project received.
+        </h2>
+        <p className="mt-3 text-base leading-relaxed text-lsl-graphite">
+          Thanks. We&apos;ll review your logos and items and reply with a proof and a quote — usually within one business day.
+          {email && (
+            <>
+              {' '}A copy is on its way to{' '}
+              <span className="font-medium text-lsl-ink">{email}</span>.
+            </>
+          )}
+        </p>
+        {orderId && (
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-lsl-stone bg-white px-4 py-1.5 font-mono text-xs uppercase tracking-[0.2em] text-lsl-graphite">
+            Order ref{' '}
+            <span className="font-semibold text-lsl-ink">{orderId.slice(0, 8)}</span>
+          </p>
+        )}
+        <div className="mt-10 flex flex-col gap-3">
+          <Button variant="primary" size="lg" onClick={onNewOrder}>
+            Start another project
+          </Button>
+          {onScheduleCall && (
+            <Button variant="secondary" size="lg" onClick={onScheduleCall}>
+              <Calendar className="h-4 w-4" strokeWidth={1.75} /> Book a design call
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Confetti() {
+  // Very small CSS-driven confetti — respects reduced-motion via parent gate.
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        delay: Math.random() * 0.4,
+        duration: 1.4 + Math.random() * 1.2,
+        color: ['#003380', '#C2A45F', '#0B0B0E', '#F7F4EE'][i % 4],
+        rotate: Math.random() * 360,
+      })),
+    [],
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {pieces.map((p) => (
+        <motion.span
+          key={p.id}
+          initial={{ y: -40, x: 0, opacity: 0, rotate: 0 }}
+          animate={{
+            y: '110vh',
+            x: (Math.random() - 0.5) * 80,
+            opacity: [0, 1, 1, 0],
+            rotate: p.rotate,
+          }}
+          transition={{
+            duration: p.duration,
+            delay: p.delay,
+            ease: 'easeIn',
+          }}
+          style={{
+            left: `${p.left}%`,
+            background: p.color,
+          }}
+          className="absolute top-10 inline-block h-2.5 w-1.5 rounded-sm"
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Helpers ───
+
+function getStepperState({
+  id,
+  isValid,
+  hasError,
+  current,
+}: {
+  id: string;
+  isValid: boolean;
+  hasError: boolean;
+  current: string;
+}): Step['state'] {
+  if (hasError) return 'error';
+  if (current === id) return 'current';
+  if (isValid) return 'valid';
+  return 'incomplete';
+}
+
+// ─── Storage preview ───
+
+function StoragePreviewImage({ path, alt }: { path: string; alt?: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.storage
+        .from('organization-assets')
+        .createSignedUrl(path, 3600);
+      if (mounted && data?.signedUrl) setUrl(data.signedUrl);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [path]);
+  if (!url) {
+    return (
+      <div className="grid h-full w-full place-items-center">
+        <Loader2 className="h-4 w-4 animate-spin text-lsl-graphite" />
+      </div>
+    );
+  }
+  return <img src={url} alt={alt ?? 'Preview'} className="h-full w-full object-contain" />;
 }
