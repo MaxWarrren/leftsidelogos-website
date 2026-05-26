@@ -93,7 +93,7 @@ export const About: React.FC = () => {
 
             <div className="absolute inset-x-5 bottom-5 flex items-end justify-between gap-4">
               <div className="text-lsl-cream">
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-cream/70">
+                <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-cream/70">
                   <span className="tabular-nums">{String(index + 1).padStart(2, '0')}</span>
                   <span aria-hidden="true"> / </span>
                   <span className="tabular-nums">{String(IMAGES.length).padStart(2, '0')}</span>
@@ -158,7 +158,7 @@ export const About: React.FC = () => {
           transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
           className="md:col-span-7 md:pt-6"
         >
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+          <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
             About · Est. 2023
           </p>
           <h2 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl lg:text-[3.5rem]">
@@ -193,7 +193,7 @@ function Stat({ value, label }: { value: string; label: string }) {
       <p className="font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-4xl">
         <span className="tabular-nums">{value}</span>
       </p>
-      <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+      <p className="mt-1 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
         {label}
       </p>
     </div>

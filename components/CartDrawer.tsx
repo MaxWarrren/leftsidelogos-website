@@ -95,7 +95,7 @@ function CartDrawer({ open, onOpenChange, onCheckout }: CartDrawerProps) {
                       <p className="truncate font-display text-base font-semibold text-lsl-ink">
                         {group.productName}
                       </p>
-                      <p className="font-mono text-[11px] uppercase text-lsl-graphite">
+                      <p className="font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
                         {group.sku}
                       </p>
                       <p className="mt-1 text-sm font-medium text-lsl-ink tabular-nums">
@@ -122,7 +122,7 @@ function CartDrawer({ open, onOpenChange, onCheckout }: CartDrawerProps) {
                           >
                             <Minus className="h-3 w-3" strokeWidth={2} />
                           </button>
-                          <span className="w-7 text-center font-mono tabular-nums">
+                          <span className="w-7 text-center font-sans tabular-nums">
                             {v.quantity}
                           </span>
                           <button

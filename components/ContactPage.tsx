@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Calendar,
   ChevronDown,
-  Copy,
   Mail,
   MapPin,
   Phone,
@@ -47,124 +46,114 @@ export const ContactPage: React.FC = () => {
   return (
     <div className="bg-lsl-cream pt-24 pb-20 md:pt-28">
       <section className="mx-auto max-w-7xl px-6 md:px-10">
+        {/* Hero */}
         <motion.header
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="max-w-3xl"
+          className="mx-auto max-w-3xl text-center"
         >
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+          <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
             Get in touch
           </p>
-          <h1 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl lg:text-[3.5rem]">
-            Book a call, send a note,
-            <br className="hidden md:block" />{' '}
-            <span className="text-lsl-graphite">or just call us.</span>
+          <h1 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl">
+            Book a call.
           </h1>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-lsl-graphite md:text-lg">
-            We&apos;re a small team — you&apos;ll talk to the same person from quote through shipped boxes. Pick whichever channel is easiest.
+          <p className="mt-4 text-base leading-relaxed text-lsl-graphite md:text-lg">
+            Pick a time below — you&apos;ll talk to the same person from quote through shipped boxes.
           </p>
         </motion.header>
 
-        <div className="mt-14 grid gap-10 lg:grid-cols-12 lg:gap-12">
-          <motion.aside
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.45, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
-            className="lg:col-span-5"
-          >
-            <ul className="space-y-4">
-              <ContactMethod
-                icon={Calendar}
-                label="Book a design call"
-                primary="30-minute discovery call"
-                secondary="Best for new projects or anything with multiple decisions."
-                actionLabel="Scroll to calendar"
-                onAction={() => {
-                  const el = document.getElementById('contact-calendar');
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              />
-              <ContactMethod
-                icon={Phone}
-                label="Direct line"
-                primary="(314) 583-5431"
-                secondary="Mon–Fri · 9:00 am – 4:30 pm CT"
-                actionLabel="Copy number"
-                onAction={() => {
-                  navigator.clipboard.writeText('+13145835431').then(
-                    () => toast.success('Number copied'),
-                    () => toast.error('Could not copy'),
-                  );
-                }}
-                actionHref="tel:+13145835431"
-              />
-              <ContactMethod
-                icon={Mail}
-                label="Email"
-                primary="leftsidelogos@gmail.com"
-                secondary="Reply usually within one business day."
-                actionLabel="Copy email"
-                onAction={() => {
-                  navigator.clipboard
-                    .writeText('leftsidelogos@gmail.com')
-                    .then(
-                      () => toast.success('Email copied'),
-                      () => toast.error('Could not copy'),
-                    );
-                }}
-                actionHref="mailto:leftsidelogos@gmail.com"
-              />
-              <ContactMethod
-                icon={MapPin}
-                label="Workshop"
-                primary="29 W Industrial Dr."
-                secondary="O’Fallon, MO 63366 · pickup by appointment"
-                actionLabel="Open in Maps"
-                actionHref="https://maps.google.com/?q=29+West+Industrial+Dr,+O%27Fallon,+MO+63366"
-              />
-            </ul>
-          </motion.aside>
-
-          <motion.div
-            id="contact-calendar"
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.45, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="relative overflow-hidden rounded-3xl border border-lsl-stone bg-white shadow-lsl-card lg:col-span-7"
-          >
-            <div className="flex items-center justify-between border-b border-lsl-stone px-5 py-3">
-              <div className="flex items-center gap-2">
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-lsl-navy/10 text-lsl-navy">
-                  <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} />
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
-                  Book a call
-                </span>
-              </div>
-              <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite md:inline">
-                30 min · CT timezone
+        {/* Cal.com — focal point */}
+        <motion.div
+          id="contact-calendar"
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.45, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto mt-12 max-w-4xl overflow-hidden rounded-3xl border border-lsl-stone bg-white shadow-lsl-card"
+        >
+          <div className="flex items-center justify-between border-b border-lsl-stone px-5 py-3">
+            <div className="flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-lsl-navy/10 text-lsl-navy">
+                <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </span>
+              <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+                Book a call
               </span>
             </div>
-            <div className="relative">
-              <CalendarSkeleton />
-              <div className="relative z-10 p-2 md:p-3">
-                <Cal
-                  namespace="test-live"
-                  calLink="brad-gunn-q42thj/test-live"
-                  style={{
-                    width: '100%',
-                    minHeight: '600px',
-                    overflow: 'scroll',
-                  }}
-                  config={{ layout: 'month_view' }}
-                />
-              </div>
+            <span className="hidden font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite md:inline">
+              30 min · CT timezone
+            </span>
+          </div>
+          <div className="relative">
+            <CalendarSkeleton />
+            <div className="relative z-10 p-2 md:p-3">
+              <Cal
+                namespace="test-live"
+                calLink="brad-gunn-q42thj/test-live"
+                style={{
+                  width: '100%',
+                  minHeight: '600px',
+                  overflow: 'scroll',
+                }}
+                config={{ layout: 'month_view' }}
+              />
             </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
+
+        {/* Contact methods — compact 4-up grid, footed */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.45, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <ContactMethod
+            icon={Calendar}
+            label="Schedule"
+            value="30-min call"
+            actionHref="#contact-calendar"
+            onAction={() => {
+              const el = document.getElementById('contact-calendar');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
+          <ContactMethod
+            icon={Phone}
+            label="Call"
+            value="(314) 583-5431"
+            actionHref="tel:+13145835431"
+            onAction={() => {
+              navigator.clipboard.writeText('+13145835431').then(
+                () => toast.success('Number copied'),
+                () => toast.error('Could not copy'),
+              );
+            }}
+          />
+          <ContactMethod
+            icon={Mail}
+            label="Email"
+            value="leftsidelogos@gmail.com"
+            actionHref="mailto:leftsidelogos@gmail.com"
+            onAction={() => {
+              navigator.clipboard
+                .writeText('leftsidelogos@gmail.com')
+                .then(
+                  () => toast.success('Email copied'),
+                  () => toast.error('Could not copy'),
+                );
+            }}
+          />
+          <ContactMethod
+            icon={MapPin}
+            label="Workshop"
+            value="O’Fallon, MO"
+            actionHref="https://maps.google.com/?q=29+West+Industrial+Dr,+O%27Fallon,+MO+63366"
+          />
+        </motion.div>
 
         <section className="mt-24 md:mt-32">
           <motion.div
@@ -174,7 +163,7 @@ export const ContactPage: React.FC = () => {
             transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-3xl"
           >
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
               Faqs
             </p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-4xl">
@@ -199,59 +188,47 @@ export const ContactPage: React.FC = () => {
 function ContactMethod({
   icon: Icon,
   label,
-  primary,
-  secondary,
-  actionLabel,
+  value,
   onAction,
   actionHref,
 }: {
   icon: typeof Calendar;
   label: string;
-  primary: string;
-  secondary: string;
-  actionLabel: string;
+  value: string;
   onAction?: () => void;
   actionHref?: string;
 }) {
+  const isAnchor = actionHref?.startsWith('#');
+  const Wrapper: React.ElementType =
+    actionHref && !isAnchor ? 'a' : onAction ? 'button' : 'div';
+  const wrapperProps: Record<string, unknown> =
+    actionHref && !isAnchor
+      ? {
+          href: actionHref,
+          target: actionHref.startsWith('http') ? '_blank' : undefined,
+          rel: actionHref.startsWith('http') ? 'noreferrer' : undefined,
+          onClick: onAction,
+        }
+      : onAction
+      ? { type: 'button', onClick: onAction }
+      : {};
   return (
-    <li className="flex items-start gap-4 rounded-2xl border border-lsl-stone bg-white p-5 shadow-lsl-card transition-all hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift">
-      <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-xl bg-lsl-navy/8 text-lsl-navy">
-        <Icon className="h-5 w-5" strokeWidth={1.5} />
+    <Wrapper
+      {...wrapperProps}
+      className="group flex h-24 w-full items-center gap-3 rounded-2xl border border-lsl-stone bg-white px-4 text-left shadow-lsl-card transition-all hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift"
+    >
+      <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-lsl-navy/8 text-lsl-navy">
+        <Icon className="h-4 w-4" strokeWidth={1.5} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+        <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
           {label}
         </p>
-        <p className="mt-1 font-display text-base font-semibold leading-tight text-lsl-ink md:text-lg">
-          {primary}
+        <p className="mt-0.5 truncate text-sm font-medium text-lsl-ink">
+          {value}
         </p>
-        <p className="mt-1 text-sm text-lsl-graphite">{secondary}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {actionHref && (
-            <a
-              href={actionHref}
-              target={actionHref.startsWith('http') ? '_blank' : undefined}
-              rel={actionHref.startsWith('http') ? 'noreferrer' : undefined}
-              className="text-xs font-medium text-lsl-navy underline-offset-4 hover:underline"
-            >
-              {actionHref.startsWith('tel:') ? 'Tap to call' :
-               actionHref.startsWith('mailto:') ? 'Open in email app' :
-               actionHref.startsWith('http') ? 'Open in Maps' :
-               'Open'}
-            </a>
-          )}
-          {onAction && (
-            <button
-              type="button"
-              onClick={onAction}
-              className="inline-flex items-center gap-1 text-xs font-medium text-lsl-graphite underline-offset-4 hover:text-lsl-ink hover:underline"
-            >
-              <Copy className="h-3 w-3" strokeWidth={1.75} /> {actionLabel}
-            </button>
-          )}
-        </div>
       </div>
-    </li>
+    </Wrapper>
   );
 }
 

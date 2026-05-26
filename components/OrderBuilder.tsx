@@ -28,7 +28,6 @@ import { useCart } from './CartContext';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { MediaPicker, type MediaItem } from './MediaPicker';
-import type { GroupedCartItem } from '../types';
 import { OrderBuilderStepper, type Step } from './OrderBuilderStepper';
 import { Button } from './ui/button';
 import { toast } from './ui/toaster';
@@ -48,7 +47,6 @@ interface OrderDraft {
   useCase: UseCase | null;
   serviceInterests: ServiceInterest[];
   timeline: Timeline | null;
-  logoPlacement: string;
   // 04 — Logos (cart is 03)
   logoMedia: MediaItem[];
   mockupImageUrl: string | null;
@@ -75,6 +73,7 @@ export const OrderBuilder: React.FC<{
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
 
   const {
+    items: cartItems,
     getGroupedItems,
     getCartTotal,
     getCartCount,
@@ -87,6 +86,65 @@ export const OrderBuilder: React.FC<{
   const groupedItems = getGroupedItems();
   const cartTotal = getCartTotal();
   const cartCount = getCartCount();
+
+  // Step 3 view: collapse cart items by (productId, color) so each color of
+  // the same shirt gets its own card. Sizes live inside the card as rows.
+  // This is a *flatter* grouping than getGroupedItems() (which the cart
+  // drawer uses); we keep both shapes alive.
+  const colorGroups = useMemo(() => {
+    type ColorGroup = {
+      key: string;
+      productId: string;
+      productName: string;
+      sku: string;
+      category: string;
+      color: string;
+      basePrice: number;
+      image: string | null;
+      mockupUrl: string | null;
+      rows: {
+        id: string;
+        size: string;
+        quantity: number;
+        subtotal: number;
+      }[];
+      totalQuantity: number;
+      subtotal: number;
+    };
+    const map = new Map<string, ColorGroup>();
+    for (const item of cartItems) {
+      const key = `${item.productId}::${item.color}`;
+      const row = {
+        id: item.id,
+        size: item.size,
+        quantity: item.quantity,
+        subtotal: item.quantity * item.basePrice,
+      };
+      const existing = map.get(key);
+      if (existing) {
+        existing.rows.push(row);
+        existing.totalQuantity += item.quantity;
+        existing.subtotal += row.subtotal;
+        if (!existing.mockupUrl && item.mockupUrl) existing.mockupUrl = item.mockupUrl;
+      } else {
+        map.set(key, {
+          key,
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku,
+          category: item.category,
+          color: item.color,
+          basePrice: item.basePrice,
+          image: item.image,
+          mockupUrl: item.mockupUrl ?? null,
+          rows: [row],
+          totalQuantity: item.quantity,
+          subtotal: row.subtotal,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [cartItems]);
 
   // ─── Hard auth gate ───
   // OrderBuilder is now sign-in-required. If the visitor isn't authenticated,
@@ -109,7 +167,6 @@ export const OrderBuilder: React.FC<{
     useCase: null,
     serviceInterests: [],
     timeline: null,
-    logoPlacement: '',
     logoMedia: [],
     mockupImageUrl: null,
     mockupPrompt: '',
@@ -192,41 +249,18 @@ export const OrderBuilder: React.FC<{
     return () => observer.disconnect();
   }, []);
 
-  // Auto-attach raw logos that were uploaded inside MockupStudio. Whenever the
-  // cart changes, collect unique sourceLogoUrls and merge them into logoMedia
-  // (skipping URLs that are already attached, so manual deletes stick).
+  // Step 4 UX nudge: when the customer first reaches the logos section with
+  // nothing attached, auto-open the MediaPicker so they know where to pick
+  // brand assets from. MockupStudio uploads land in `media_items` directly
+  // (category='Brand Assets'), so the picker naturally surfaces them.
+  const hasAutoOpenedPicker = useRef(false);
   useEffect(() => {
-    const cartLogoUrls = Array.from(
-      new Set(
-        groupedItems
-          .flatMap((g) => g.sourceLogoUrls ?? [])
-          .filter((u): u is string => !!u),
-      ),
-    );
-    if (cartLogoUrls.length === 0) return;
-    setDraft((d) => {
-      const existing = new Set(d.logoMedia.map((m) => m.file_path));
-      const additions: MediaItem[] = cartLogoUrls
-        .filter((url) => !existing.has(url))
-        .map((url) => {
-          const filename = url.split('/').pop() || 'mockup-logo';
-          return {
-            id: url,
-            file_path: url,           // we store the public URL directly; submit reads it as-is
-            file_name: filename,
-            file_type: 'image/*',
-            size: 0,
-            category: 'Brand Assets',
-            created_at: new Date().toISOString(),
-            uploader_id: user?.id ?? '',
-            source: 'mockup-studio',
-          } as MediaItem;
-        });
-      if (additions.length === 0) return d;
-      return { ...d, logoMedia: [...d.logoMedia, ...additions].slice(0, 3) };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupedItems.map((g) => (g.sourceLogoUrls || []).join(',')).join('|')]);
+    if (hasAutoOpenedPicker.current) return;
+    if (currentSection !== SECTION_IDS.logos) return;
+    if (draft.logoMedia.length > 0) return;
+    hasAutoOpenedPicker.current = true;
+    setIsMediaPickerOpen(true);
+  }, [currentSection, draft.logoMedia.length]);
 
   const setRef = (id: string) => (el: HTMLElement | null) => {
     sectionRefs.current[id] = el;
@@ -239,7 +273,7 @@ export const OrderBuilder: React.FC<{
     [draft.contact.email],
   );
   const hasName = draft.contact.name.trim().length >= 2;
-  const hasCart = groupedItems.length > 0;
+  const hasCart = cartItems.length > 0;
   const hasBriefBasics = !!draft.useCase && !!draft.timeline;
 
   // Step state for the sticky stepper.
@@ -490,7 +524,6 @@ export const OrderBuilder: React.FC<{
       if (draft.serviceInterests.length)
         descParts.push(`Services: ${draft.serviceInterests.join(', ')}`);
       if (draft.timeline) descParts.push(`Timeline: ${draft.timeline}`);
-      if (draft.logoPlacement) descParts.push(`Placement: ${draft.logoPlacement}`);
 
       // Generate AI summary (best-effort; failure does not block submit).
       let aiSummary = '';
@@ -620,7 +653,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
     return (
       <div className="min-h-screen bg-lsl-cream pt-24 pb-24">
         <div className="mx-auto max-w-xl px-6 text-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+          <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
             Order Builder
           </p>
           <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-lsl-ink">
@@ -634,7 +667,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
             <button
               type="button"
               onClick={onNavigateToCatalog}
-              className="mt-8 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-graphite hover:text-lsl-ink"
+              className="mt-8 inline-flex items-center gap-1.5 font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-graphite hover:text-lsl-ink"
             >
               ← Back to catalog
             </button>
@@ -668,7 +701,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
       >
         <div className="mx-auto max-w-3xl px-6 md:px-10">
           <header className="mb-8 md:mb-10">
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
               Order Builder
             </p>
             <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-lsl-ink md:text-5xl">
@@ -849,18 +882,6 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                 />
               </Field>
 
-              <Field
-                label="Logo placement notes"
-                hint="Optional · e.g. left chest + back, hat front, sleeve"
-              >
-                <input
-                  type="text"
-                  value={draft.logoPlacement}
-                  onChange={(e) => updateDraft({ logoPlacement: e.target.value })}
-                  placeholder="Left chest, full back, etc."
-                  className={inputClass(false)}
-                />
-              </Field>
             </Section>
 
             {/* ── 03 — Items ── */}
@@ -876,13 +897,13 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                   : undefined
               }
             >
-              {groupedItems.length === 0 ? (
+              {colorGroups.length === 0 ? (
                 <EmptyCart onNavigateToCatalog={onNavigateToCatalog} />
               ) : (
                 <div className="space-y-3">
-                  {groupedItems.map((group) => (
-                    <CartItemCard
-                      key={group.productId}
+                  {colorGroups.map((group) => (
+                    <CartColorCard
+                      key={group.key}
                       group={group}
                       onUpdateQuantity={updateQuantity}
                       onRemove={removeFromCart}
@@ -890,7 +911,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                   ))}
                   <div className="flex items-center justify-between rounded-2xl border border-lsl-stone bg-white px-5 py-4">
                     <div className="text-sm">
-                      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+                      <span className="font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
                         {cartCount} items
                       </span>
                       {onNavigateToCatalog && (
@@ -904,7 +925,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+                      <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
                         Est. total
                       </p>
                       <p className="font-display text-2xl font-semibold tabular-nums text-lsl-ink">
@@ -968,7 +989,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                       className="grid aspect-square place-items-center gap-2 rounded-xl border-2 border-dashed border-lsl-stone text-lsl-graphite transition-all hover:border-lsl-navy hover:bg-lsl-navy-50 hover:text-lsl-navy"
                     >
                       <Upload className="h-5 w-5" strokeWidth={1.75} />
-                      <span className="font-mono text-[10px] uppercase tracking-[0.18em]">
+                      <span className="font-sans text-[10px] uppercase tracking-[0.18em]">
                         Add logo
                       </span>
                     </button>
@@ -1059,7 +1080,7 @@ const Section = React.forwardRef<HTMLElement, SectionProps>(function Section(
       className="scroll-mt-40"
     >
       <header className="mb-5 flex items-baseline gap-3">
-        <span className="font-mono text-[11px] tabular-nums uppercase tracking-[0.22em] text-lsl-navy">
+        <span className="font-sans text-[11px] tabular-nums uppercase tracking-[0.22em] text-lsl-navy">
           {number}
         </span>
         <h2
@@ -1104,7 +1125,7 @@ function Field({
   return (
     <label className={cn('block', className)}>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+        <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
           {label}
           {required && <span className="ml-1 text-red-500">*</span>}
         </span>
@@ -1230,16 +1251,31 @@ function EmptyCart({
   );
 }
 
-function CartItemCard({
+interface CartColorGroup {
+  key: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  category: string;
+  color: string;
+  basePrice: number;
+  image: string | null;
+  mockupUrl: string | null;
+  rows: { id: string; size: string; quantity: number; subtotal: number }[];
+  totalQuantity: number;
+  subtotal: number;
+}
+
+function CartColorCard({
   group,
   onUpdateQuantity,
   onRemove,
 }: {
-  group: GroupedCartItem;
+  group: CartColorGroup;
   onUpdateQuantity: (id: string, qty: number) => void;
   onRemove: (id: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   return (
     <div className="overflow-hidden rounded-2xl border border-lsl-stone bg-white">
       <button
@@ -1252,13 +1288,13 @@ function CartItemCard({
           {group.mockupUrl ? (
             <img
               src={group.mockupUrl}
-              alt={group.productName}
+              alt={`${group.productName} — ${group.color}`}
               className="h-full w-full object-cover"
             />
           ) : group.image ? (
             <img
               src={group.image}
-              alt={group.productName}
+              alt={`${group.productName} — ${group.color}`}
               className="h-full w-full object-contain p-1.5"
             />
           ) : (
@@ -1274,9 +1310,9 @@ function CartItemCard({
           <h3 className="truncate font-display text-base font-semibold text-lsl-ink">
             {group.productName}
           </h3>
-          <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
-            {group.sku} · {group.category} · {group.variants.length} variant
-            {group.variants.length === 1 ? '' : 's'}
+          <p className="mt-0.5 font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+            {group.color} · {group.rows.length} size
+            {group.rows.length === 1 ? '' : 's'} · {group.sku}
           </p>
         </div>
         <div className="flex-shrink-0 text-right">
@@ -1298,24 +1334,23 @@ function CartItemCard({
 
       {expanded && (
         <div className="border-t border-lsl-stone bg-lsl-cream/40">
-          <div className="grid grid-cols-[1fr_1fr_140px_44px] gap-3 px-5 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
-            <span>Color</span>
+          <div className="grid grid-cols-[1fr_140px_90px_44px] gap-3 px-5 py-2 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
             <span>Size</span>
             <span className="text-center">Qty</span>
+            <span className="text-right">Line</span>
             <span aria-hidden="true" />
           </div>
-          {group.variants.map((v) => (
+          {group.rows.map((row) => (
             <div
-              key={v.id}
-              className="grid grid-cols-[1fr_1fr_140px_44px] items-center gap-3 border-t border-lsl-stone/60 px-5 py-3"
+              key={row.id}
+              className="grid grid-cols-[1fr_140px_90px_44px] items-center gap-3 border-t border-lsl-stone/60 px-5 py-3"
             >
-              <span className="truncate text-sm text-lsl-ink">{v.color}</span>
-              <span className="text-sm text-lsl-ink">{v.size}</span>
+              <span className="text-sm text-lsl-ink">{row.size}</span>
               <div className="flex items-center justify-center gap-1">
                 <button
                   type="button"
-                  onClick={() => onUpdateQuantity(v.id, v.quantity - 1)}
-                  disabled={v.quantity <= 1}
+                  onClick={() => onUpdateQuantity(row.id, row.quantity - 1)}
+                  disabled={row.quantity <= 1}
                   aria-label="Decrease quantity"
                   className="grid h-9 w-9 place-items-center rounded-md border border-lsl-stone text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink disabled:opacity-40"
                 >
@@ -1324,28 +1359,31 @@ function CartItemCard({
                 <input
                   type="number"
                   min={1}
-                  value={v.quantity}
+                  value={row.quantity}
                   onChange={(e) =>
                     onUpdateQuantity(
-                      v.id,
+                      row.id,
                       Math.max(1, parseInt(e.target.value || '1', 10)),
                     )
                   }
-                  className="h-9 w-12 rounded-md border border-lsl-stone bg-white text-center font-mono text-sm tabular-nums text-lsl-ink focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
+                  className="h-9 w-12 rounded-md border border-lsl-stone bg-white text-center font-sans text-sm tabular-nums text-lsl-ink focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
                 />
                 <button
                   type="button"
-                  onClick={() => onUpdateQuantity(v.id, v.quantity + 1)}
+                  onClick={() => onUpdateQuantity(row.id, row.quantity + 1)}
                   aria-label="Increase quantity"
                   className="grid h-9 w-9 place-items-center rounded-md border border-lsl-stone text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
+              <span className="text-right text-sm tabular-nums text-lsl-ink">
+                ${row.subtotal.toFixed(2)}
+              </span>
               <button
                 type="button"
-                onClick={() => onRemove(v.id)}
-                aria-label="Remove variant"
+                onClick={() => onRemove(row.id)}
+                aria-label="Remove size"
                 className="grid h-9 w-9 place-items-center rounded-md text-lsl-graphite transition-colors hover:bg-red-50 hover:text-red-600"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -1417,7 +1455,7 @@ function SuccessScreen({
           )}
         </p>
         {orderId && (
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-lsl-stone bg-white px-4 py-1.5 font-mono text-xs uppercase tracking-[0.2em] text-lsl-graphite">
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-lsl-stone bg-white px-4 py-1.5 font-sans text-xs uppercase tracking-[0.2em] text-lsl-graphite">
             Order ref{' '}
             <span className="font-semibold text-lsl-ink">{orderId.slice(0, 8)}</span>
           </p>

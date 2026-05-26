@@ -19,6 +19,8 @@ import useImage from 'use-image';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
+  Check,
+  ChevronDown,
   Copy,
   Crop,
   Download,
@@ -52,6 +54,8 @@ const STAGE_ASPECT = 1; // square canvas
 const MAX_LOGO_BYTES = 8 * 1024 * 1024;
 const PRINT_AREA_ID = '__print_area__';
 const MIN_PRINT_AREA_FRAC = 0.08; // never shrink below 8% of stage in either dimension
+const VIEW_ORDER = ['front', 'side', 'back'] as const;
+const VISIBLE_SWATCH_LIMIT = 8;
 
 // ─── Public component ───
 
@@ -88,16 +92,19 @@ function Studio({
 }) {
   const { addToCart } = useCart();
   const { openDrawer } = useCartDrawer();
-  const { user, isAuthenticated, openAuthModal } = useAuth();
+  const { user, organization, isAuthenticated, openAuthModal } = useAuth();
   void onNavigateToBuildOrder; // Add-to-project now stays on this page.
 
-  // Available angles, derived from `image_variants` (falls back to a synthetic "front" using images[0]).
+  // Available angles, derived from `image_variants` with stable Front→Side→Back ordering.
   const angles = useMemo(() => {
     const fromVariants = product.image_variants
       ? Object.keys(product.image_variants)
       : [];
-    if (fromVariants.length) return fromVariants;
-    return product.images?.length ? ['front'] : [];
+    if (!fromVariants.length) return product.images?.length ? ['front'] : [];
+    const ordered: string[] = VIEW_ORDER.filter((v) => fromVariants.includes(v));
+    return ordered.concat(
+      fromVariants.filter((v) => !VIEW_ORDER.includes(v as any)),
+    );
   }, [product]);
 
   const printAreas: ProductPrintAreas = useMemo(() => {
@@ -114,29 +121,28 @@ function Studio({
     product.base_color ?? product.colors[0] ?? 'Black',
   );
 
-  // In-page cart form state — replaces the old top-bar "Save & add" button.
+  // In-page cart form state.
   const [selectedSize, setSelectedSize] = useState<string>(
     product.sizes[0] ?? '',
   );
   const [quantity, setQuantity] = useState<number>(12);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
 
-  // Public URLs of raw logo files the customer has uploaded during this
-  // session. Persisted into each cart line so OrderBuilder Step 4 can auto-
-  // attach them without re-upload.
+  // Public URLs of raw logo files the customer has uploaded during this session.
   const [uploadedLogoUrls, setUploadedLogoUrls] = useState<string[]>([]);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
-  // Per-angle placements. Each entry is the layer stack for that view.
-  const [placementsByAngle, setPlacementsByAngle] = useState<
-    Record<string, MockupPlacement[]>
-  >(() => Object.fromEntries(angles.map((a) => [a, [] as MockupPlacement[]])));
-  const placements = placementsByAngle[activeAngle] ?? [];
+  // Placements live globally across views — they sit at the same canvas coords
+  // regardless of which angle the user is looking at.
+  const [placements, setPlacements] = useState<MockupPlacement[]>([]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Customer overrides for the print area, per angle. Stored as normalized
-  // 0-1 rects so they survive stage resize. Falls back to product props.
+  // Print-area edit mode. While ON, the placements layer is dimmed + locked
+  // and the print-area Rect (on its own layer above) becomes interactive.
+  const [isEditingPrintArea, setIsEditingPrintArea] = useState(false);
+
+  // Customer overrides for the print area, per angle.
   const [printAreaOverrides, setPrintAreaOverrides] = useState<ProductPrintAreas>({});
   const currentPrintArea = useMemo(
     () =>
@@ -183,51 +189,39 @@ function Studio({
 
   const stageRef = useRef<Konva.Stage>(null);
 
-  // Resolve the active product image (variant if present, else first images array entry).
+  // Resolve the active product image — no tinting fallback, just first-color fallback.
   const resolvedImageUrl = useMemo(() => {
     const colorKey = normalizeColorKey(activeColor);
     const variantsForAngle = product.image_variants?.[activeAngle];
     if (variantsForAngle) {
       if (variantsForAngle[colorKey]) return variantsForAngle[colorKey];
-      // First available color for this angle as fallback.
       const firstKey = Object.keys(variantsForAngle)[0];
       if (firstKey) return variantsForAngle[firstKey];
     }
     return product.images?.[0] ?? null;
   }, [activeAngle, activeColor, product]);
 
-  // True when the currently rendered PNG already represents this color → skip tinting.
-  const isExactColorImage = useMemo(() => {
-    const colorKey = normalizeColorKey(activeColor);
-    return !!product.image_variants?.[activeAngle]?.[colorKey];
-  }, [activeAngle, activeColor, product]);
-
   // ─── Mutations ───
 
-  const updatePlacements = useCallback(
-    (mutator: (current: MockupPlacement[]) => MockupPlacement[]) => {
-      setPlacementsByAngle((prev) => ({
-        ...prev,
-        [activeAngle]: mutator(prev[activeAngle] ?? []),
-      }));
+  const upsertPlacement = useCallback((next: MockupPlacement) => {
+    setPlacements((current) => {
+      const exists = current.some((p) => p.id === next.id);
+      return exists
+        ? current.map((p) => (p.id === next.id ? next : p))
+        : [...current, next];
+    });
+  }, []);
+
+  const removePlacement = useCallback(
+    (id: string) => {
+      setPlacements((current) => current.filter((p) => p.id !== id));
+      if (selectedId === id) setSelectedId(null);
     },
-    [activeAngle],
+    [selectedId],
   );
 
-  const upsertPlacement = (next: MockupPlacement) => {
-    updatePlacements((current) => {
-      const exists = current.some((p) => p.id === next.id);
-      return exists ? current.map((p) => (p.id === next.id ? next : p)) : [...current, next];
-    });
-  };
-
-  const removePlacement = (id: string) => {
-    updatePlacements((current) => current.filter((p) => p.id !== id));
-    if (selectedId === id) setSelectedId(null);
-  };
-
-  const duplicatePlacement = (id: string) => {
-    updatePlacements((current) => {
+  const duplicatePlacement = useCallback((id: string) => {
+    setPlacements((current) => {
       const target = current.find((p) => p.id === id);
       if (!target) return current;
       const dup: MockupPlacement = {
@@ -238,39 +232,40 @@ function Studio({
       };
       return [...current, dup];
     });
-  };
+  }, []);
 
-  const fitToPrintArea = (id: string) => {
-    const area = currentPrintArea;
-    updatePlacements((current) =>
-      current.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              x: area.x * stageSize.width,
-              y: area.y * stageSize.height,
-              width: area.width * stageSize.width,
-              height: area.height * stageSize.height,
-              rotation: 0,
-            }
-          : p,
-      ),
-    );
-  };
+  const fitToPrintArea = useCallback(
+    (id: string) => {
+      const area = currentPrintArea;
+      setPlacements((current) =>
+        current.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                x: area.x * stageSize.width,
+                y: area.y * stageSize.height,
+                width: area.width * stageSize.width,
+                height: area.height * stageSize.height,
+                rotation: 0,
+              }
+            : p,
+        ),
+      );
+    },
+    [currentPrintArea, stageSize],
+  );
 
   // ─── Logo upload ───
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFiles = async (files: FileList | File[]) => {
-    // Snapshot to an array immediately — FileList is a live ref on many
-    // browsers and gets cleared when the input value resets.
     const arr = Array.from(files).filter((f) => f.type.startsWith('image/'));
     if (!arr.length) {
       toast.error('Pick an image file', { description: 'PNG, JPG, or SVG.' });
       return;
     }
     setIsUploadingLogo(true);
-    let placedAnyForUnauthed = false;
+    let placedAnyWithoutOrg = false;
     try {
       for (const file of arr) {
         if (file.size > MAX_LOGO_BYTES) {
@@ -298,37 +293,57 @@ function Studio({
         upsertPlacement(placement);
         setSelectedId(placement.id);
 
-        // Save the original file to Storage when signed in so OrderBuilder
-        // Step 4 can auto-attach it. Unsigned users still get the canvas
-        // preview — we nudge them once after the loop.
-        if (isAuthenticated && user) {
-          const ext = file.name.split('.').pop() || 'png';
-          const safeName = file.name
-            .replace(/\.[^.]+$/, '')
-            .replace(/[^a-zA-Z0-9-_]+/g, '-')
-            .slice(0, 60);
-          const path = `${user.id}/mockup-logos/${Date.now()}-${safeName}.${ext}`;
-          const { error: uploadError } = await supabase.storage
-            .from('user-uploads')
-            .upload(path, file, {
-              cacheControl: '3600',
-              upsert: false,
-            });
-          if (uploadError) {
-            toast.error(`Couldn't save ${file.name}`, { description: uploadError.message });
-            continue;
-          }
-          const { data } = supabase.storage.from('user-uploads').getPublicUrl(path);
-          setUploadedLogoUrls((prev) =>
-            prev.includes(data.publicUrl) ? prev : [...prev, data.publicUrl],
-          );
-        } else {
-          placedAnyForUnauthed = true;
+        // Persist to the canonical brand-assets bucket only when signed in
+        // AND a real org exists. Otherwise, canvas-only preview.
+        if (!isAuthenticated || !user || !organization) {
+          placedAnyWithoutOrg = true;
+          continue;
         }
+
+        const ext = file.name.split('.').pop() || 'png';
+        const safeName = file.name
+          .replace(/\.[^.]+$/, '')
+          .replace(/[^a-zA-Z0-9-_]+/g, '-')
+          .slice(0, 60);
+        const path = `${organization.id}/Brand Assets/mockup-${user.id}-${Date.now()}-${safeName}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('organization-assets')
+          .upload(path, file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+        if (uploadError) {
+          toast.error(`Couldn't save ${file.name}`, { description: uploadError.message });
+          continue;
+        }
+        const { data } = supabase.storage
+          .from('organization-assets')
+          .getPublicUrl(path);
+
+        // Register the upload in media_items so the Portal's MediaPicker
+        // (filtered by organization_id + category='Brand Assets') finds it.
+        const { error: mediaError } = await supabase.from('media_items').insert({
+          organization_id: organization.id,
+          uploader_id: user.id,
+          file_path: path,
+          file_name: file.name,
+          file_type: file.type,
+          size: file.size,
+          category: 'Brand Assets',
+        });
+        if (mediaError) {
+          // Non-fatal — the file is in Storage; just log so the customer
+          // doesn't see a scary toast over a metadata write hiccup.
+          console.warn('media_items insert failed', mediaError);
+        }
+
+        setUploadedLogoUrls((prev) =>
+          prev.includes(data.publicUrl) ? prev : [...prev, data.publicUrl],
+        );
       }
-      if (placedAnyForUnauthed) {
-        toast.message('Sign in to save the source file', {
-          description: "We'll keep your original artwork on your account so production has it.",
+      if (placedAnyWithoutOrg) {
+        toast.message("Sign up and we'll save your logo to your brand assets.", {
+          description: 'You can keep designing — we just need an account to send it to production.',
           action: { label: 'Sign in', onClick: () => openAuthModal() },
         });
       }
@@ -364,28 +379,28 @@ function Studio({
         case 'ArrowLeft':
           if (isArea) nudgeArea(-step, 0);
           else
-            updatePlacements((cur) =>
+            setPlacements((cur) =>
               cur.map((p) => (p.id === selectedId ? { ...p, x: p.x - step } : p)),
             );
           break;
         case 'ArrowRight':
           if (isArea) nudgeArea(step, 0);
           else
-            updatePlacements((cur) =>
+            setPlacements((cur) =>
               cur.map((p) => (p.id === selectedId ? { ...p, x: p.x + step } : p)),
             );
           break;
         case 'ArrowUp':
           if (isArea) nudgeArea(0, -step);
           else
-            updatePlacements((cur) =>
+            setPlacements((cur) =>
               cur.map((p) => (p.id === selectedId ? { ...p, y: p.y - step } : p)),
             );
           break;
         case 'ArrowDown':
           if (isArea) nudgeArea(0, step);
           else
-            updatePlacements((cur) =>
+            setPlacements((cur) =>
               cur.map((p) => (p.id === selectedId ? { ...p, y: p.y + step } : p)),
             );
           break;
@@ -408,8 +423,6 @@ function Studio({
   const handleAddToProject = async () => {
     if (!stageRef.current) return;
     if (!isAuthenticated) {
-      // Logos can be saved without auth in theory, but the cart UX expects
-      // the user to be on their way to checkout, so nudge sign-in early.
       toast.message('Sign in to send this to production', {
         description: 'Your project lives on your account so we can quote and confirm.',
         action: { label: 'Sign in', onClick: () => openAuthModal() },
@@ -426,8 +439,10 @@ function Studio({
 
     setIsAddingToCart(true);
     try {
-      // Deselect so the transform handles don't bleed into the export.
       setSelectedId(null);
+      // Exit print-area edit mode so its transform handles don't render into
+      // the exported PNG either.
+      setIsEditingPrintArea(false);
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       const mockupUrl = stageRef.current.toDataURL({
         pixelRatio: 2,
@@ -454,8 +469,6 @@ function Studio({
         action: { label: 'View cart', onClick: openDrawer },
       });
 
-      // Reset qty so the next variant starts from a clean state. Keep the
-      // canvas + uploaded logos so the customer can stack more variants.
       setQuantity(12);
     } finally {
       setIsAddingToCart(false);
@@ -465,6 +478,7 @@ function Studio({
   const handleDownload = async () => {
     if (!stageRef.current) return;
     setSelectedId(null);
+    setIsEditingPrintArea(false);
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
     const dataUrl = stageRef.current.toDataURL({
       pixelRatio: 2,
@@ -480,7 +494,6 @@ function Studio({
 
   const selected = placements.find((p) => p.id === selectedId) ?? null;
   const printArea = currentPrintArea;
-  const tintHex = colorToHex(activeColor);
   const lightActiveColor = isLightColor(activeColor);
 
   return (
@@ -488,14 +501,14 @@ function Studio({
       <div className="mx-auto max-w-7xl px-6 md:px-10">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
               Mockup Studio
             </p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-4xl">
               {product.name}
             </h1>
             <p className="mt-1 text-sm text-lsl-graphite">
-              Drop a logo into the print area. Drag the dashed rectangle to move where it&apos;ll land on the garment.
+              Drop a logo into the print area. Use the toolbar to resize the print area if you need to move where it lands.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -505,7 +518,45 @@ function Studio({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">
+        {/* Top toolbar */}
+        <StudioToolbar
+          angles={angles}
+          activeAngle={activeAngle}
+          onAngleChange={(a) => {
+            setActiveAngle(a);
+            setSelectedId(null);
+          }}
+          colors={product.colors}
+          activeColor={activeColor}
+          onColorChange={setActiveColor}
+          isEditingPrintArea={isEditingPrintArea}
+          isPrintAreaCustomized={isPrintAreaCustomized}
+          onTogglePrintAreaEdit={() => {
+            setIsEditingPrintArea((v) => {
+              const next = !v;
+              if (next) setSelectedId(PRINT_AREA_ID);
+              else if (selectedId === PRINT_AREA_ID) setSelectedId(null);
+              return next;
+            });
+          }}
+          onResetPrintArea={() => {
+            resetPrintArea();
+            if (selectedId === PRINT_AREA_ID) setSelectedId(null);
+          }}
+          onUploadClick={() => fileInputRef.current?.click()}
+          isUploadingLogo={isUploadingLogo}
+        />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/svg+xml"
+          multiple
+          className="hidden"
+          onChange={(e) => e.target.files && handleFiles(e.target.files)}
+        />
+
+        <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_280px]">
           {/* Canvas */}
           <div
             ref={stageWrapRef}
@@ -514,7 +565,6 @@ function Studio({
             className="relative overflow-hidden rounded-2xl border border-lsl-stone bg-white shadow-lsl-card"
             style={{ aspectRatio: `${STAGE_ASPECT} / 1` }}
             onClick={(e) => {
-              // Click outside any layer deselects.
               if (e.target === e.currentTarget) setSelectedId(null);
             }}
           >
@@ -523,21 +573,26 @@ function Studio({
               width={stageSize.width}
               height={stageSize.height}
               onMouseDown={(e) => {
-                if (e.target === e.target.getStage()) setSelectedId(null);
+                if (e.target === e.target.getStage()) {
+                  if (!isEditingPrintArea) setSelectedId(null);
+                }
               }}
               onTouchStart={(e) => {
-                if (e.target === e.target.getStage()) setSelectedId(null);
+                if (e.target === e.target.getStage()) {
+                  if (!isEditingPrintArea) setSelectedId(null);
+                }
               }}
             >
+              {/* Product image — never listens to events. */}
               <Layer listening={false}>
                 <ProductLayer
                   imageUrl={resolvedImageUrl}
-                  tintHex={tintHex}
-                  applyTint={!isExactColorImage}
                   stageSize={stageSize}
                 />
               </Layer>
-              <Layer>
+
+              {/* Placements — dimmed + non-draggable when editing the print area. */}
+              <Layer opacity={isEditingPrintArea ? 0.6 : 1}>
                 <Group
                   clipFunc={(ctx) => {
                     const px = printArea.x * stageSize.width;
@@ -551,142 +606,48 @@ function Studio({
                     <PlacementImage
                       key={p.id}
                       placement={p}
-                      isSelected={p.id === selectedId}
-                      onSelect={() => setSelectedId(p.id)}
+                      isSelected={!isEditingPrintArea && p.id === selectedId}
+                      draggable={!isEditingPrintArea}
+                      onSelect={() => {
+                        if (!isEditingPrintArea) setSelectedId(p.id);
+                      }}
                       onChange={(next) => upsertPlacement(next)}
                     />
                   ))}
                 </Group>
+              </Layer>
+
+              {/* Print area — its OWN layer above placements. The whole layer
+                  ignores hits unless we're in edit mode, so the dashed border
+                  is a pure visual cue otherwise and logos remain clickable. */}
+              <Layer listening={isEditingPrintArea}>
                 <EditablePrintArea
                   printArea={printArea}
                   stageSize={stageSize}
                   light={lightActiveColor}
-                  isSelected={selectedId === PRINT_AREA_ID}
-                  onSelect={() => setSelectedId(PRINT_AREA_ID)}
+                  isEditing={isEditingPrintArea}
+                  isSelected={isEditingPrintArea && selectedId === PRINT_AREA_ID}
+                  onSelect={() => {
+                    if (isEditingPrintArea) setSelectedId(PRINT_AREA_ID);
+                  }}
                   onChange={setPrintAreaForActiveAngle}
                 />
               </Layer>
             </Stage>
 
-            {placements.length === 0 && (
+            {placements.length === 0 && !isEditingPrintArea && (
               <DropHint onClick={() => fileInputRef.current?.click()} />
+            )}
+
+            {isEditingPrintArea && (
+              <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-lsl-ink/90 px-3 py-1 font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-cream shadow-lsl-card">
+                Editing print area
+              </div>
             )}
           </div>
 
-          {/* Side panel */}
+          {/* Right rail — narrower, focused on layers / inspector / add-to-project */}
           <aside className="space-y-5">
-            <PanelSection title="View">
-              <div className="flex flex-wrap gap-1.5">
-                {angles.map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => {
-                      setActiveAngle(a);
-                      setSelectedId(null);
-                    }}
-                    aria-pressed={a === activeAngle}
-                    className={cn(
-                      'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
-                      a === activeAngle
-                        ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
-                        : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
-                    )}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
-            </PanelSection>
-
-            <PanelSection title="Color">
-              <div className="grid grid-cols-7 gap-1.5">
-                {product.colors.map((c) => {
-                  const hex = colorToHex(c);
-                  const active = c === activeColor;
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setActiveColor(c)}
-                      aria-pressed={active}
-                      title={c}
-                      className={cn(
-                        'group relative aspect-square overflow-hidden rounded-full border-2 transition-transform',
-                        active
-                          ? 'scale-110 border-lsl-ink shadow-lsl-lift'
-                          : 'border-lsl-stone hover:border-lsl-ink',
-                      )}
-                      style={{ background: hex }}
-                    >
-                      <span className="sr-only">{c}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
-                Active · <span className="text-lsl-ink">{activeColor}</span>
-                {!isExactColorImage && (
-                  <span className="ml-2 text-lsl-graphite/70">(tinted preview)</span>
-                )}
-              </p>
-            </PanelSection>
-
-            <PanelSection title="Print area">
-              <div className="space-y-2">
-                <p className="text-[11px] leading-relaxed text-lsl-graphite">
-                  Click the dashed rectangle on the canvas to move or resize where your logo lands.
-                </p>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
-                    {isPrintAreaCustomized ? 'Custom' : 'Default'}
-                  </span>
-                  {isPrintAreaCustomized && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetPrintArea();
-                        if (selectedId === PRINT_AREA_ID) setSelectedId(null);
-                      }}
-                      className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite underline-offset-2 hover:text-lsl-ink hover:underline"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
-              </div>
-            </PanelSection>
-
-            <PanelSection title="Logo">
-              <div className="space-y-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => e.target.files && handleFiles(e.target.files)}
-                />
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingLogo}
-                  className="w-full"
-                >
-                  {isUploadingLogo ? (
-                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
-                  ) : (
-                    <Upload className="h-4 w-4" strokeWidth={1.75} />
-                  )}
-                  {isUploadingLogo ? 'Uploading…' : 'Upload logo'}
-                </Button>
-                <p className="text-[11px] leading-relaxed text-lsl-graphite">
-                  PNG, JPG, or SVG · up to 8 MB. Drag straight onto the canvas.
-                </p>
-              </div>
-            </PanelSection>
-
             <PanelSection title="Layers">
               {placements.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-lsl-stone bg-white px-3 py-4 text-center text-xs text-lsl-graphite">
@@ -712,7 +673,10 @@ function Studio({
                           >
                             <button
                               type="button"
-                              onClick={() => setSelectedId(p.id)}
+                              onClick={() => {
+                                setIsEditingPrintArea(false);
+                                setSelectedId(p.id);
+                              }}
                               className="flex min-w-0 flex-1 items-center gap-2 text-left"
                             >
                               <span className="grid h-7 w-7 flex-shrink-0 place-items-center overflow-hidden rounded-md border border-lsl-stone bg-white">
@@ -722,7 +686,7 @@ function Studio({
                                   className="h-full w-full object-contain"
                                 />
                               </span>
-                              <span className="min-w-0 flex-1 truncate font-mono text-[11px] uppercase tracking-[0.16em] text-lsl-graphite">
+                              <span className="min-w-0 flex-1 truncate font-sans text-[11px] uppercase tracking-[0.16em] text-lsl-graphite">
                                 Logo {stackIndex}
                               </span>
                             </button>
@@ -764,7 +728,7 @@ function Studio({
               )}
             </PanelSection>
 
-            {selected && (
+            {selected && !isEditingPrintArea && (
               <PanelSection title="Selected">
                 <PlacementInspector
                   placement={selected}
@@ -778,7 +742,7 @@ function Studio({
               <div className="space-y-3">
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                   <div className="space-y-1">
-                    <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                    <label className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
                       Size
                     </label>
                     <select
@@ -798,7 +762,7 @@ function Studio({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                    <label className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
                       Qty
                     </label>
                     <div className="flex h-10 items-center rounded-lg border border-lsl-stone bg-white">
@@ -817,7 +781,7 @@ function Studio({
                         onChange={(e) =>
                           setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))
                         }
-                        className="h-full w-14 border-0 bg-transparent text-center font-mono text-sm tabular-nums text-lsl-ink focus:outline-none"
+                        className="h-full w-14 border-0 bg-transparent text-center font-sans text-sm tabular-nums text-lsl-ink focus:outline-none"
                       />
                       <button
                         type="button"
@@ -851,7 +815,7 @@ function Studio({
                   {isAddingToCart ? 'Adding…' : 'Add to project'}
                 </Button>
                 <p className="text-[11px] leading-relaxed text-lsl-graphite">
-                  Stays on this page so you can add another color or size. Logos are saved to your account.
+                  Stays on this page so you can add another color or size. Logos are saved to your brand assets.
                 </p>
               </div>
             </PanelSection>
@@ -873,28 +837,265 @@ function Studio({
   );
 }
 
+// ─── Top toolbar ───
+
+function StudioToolbar({
+  angles,
+  activeAngle,
+  onAngleChange,
+  colors,
+  activeColor,
+  onColorChange,
+  isEditingPrintArea,
+  isPrintAreaCustomized,
+  onTogglePrintAreaEdit,
+  onResetPrintArea,
+  onUploadClick,
+  isUploadingLogo,
+}: {
+  angles: string[];
+  activeAngle: string;
+  onAngleChange: (a: string) => void;
+  colors: string[];
+  activeColor: string;
+  onColorChange: (c: string) => void;
+  isEditingPrintArea: boolean;
+  isPrintAreaCustomized: boolean;
+  onTogglePrintAreaEdit: () => void;
+  onResetPrintArea: () => void;
+  onUploadClick: () => void;
+  isUploadingLogo: boolean;
+}) {
+  const visibleColors = colors.slice(0, VISIBLE_SWATCH_LIMIT);
+  const overflowColors = colors.slice(VISIBLE_SWATCH_LIMIT);
+  const [colorsOpen, setColorsOpen] = useState(false);
+  const colorPopRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!colorsOpen) return;
+    const onClickAway = (e: MouseEvent) => {
+      if (!colorPopRef.current) return;
+      if (!colorPopRef.current.contains(e.target as Node)) setColorsOpen(false);
+    };
+    window.addEventListener('mousedown', onClickAway);
+    return () => window.removeEventListener('mousedown', onClickAway);
+  }, [colorsOpen]);
+
+  return (
+    <div className="mt-6 rounded-2xl border border-lsl-stone bg-white p-3 shadow-lsl-card">
+      <div className="flex flex-nowrap items-center gap-3 overflow-x-auto md:flex-wrap md:overflow-visible">
+        {/* View pills */}
+        <ToolbarGroup label="View">
+          <div className="flex items-center gap-1">
+            {angles.map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => onAngleChange(a)}
+                aria-pressed={a === activeAngle}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                  a === activeAngle
+                    ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
+                    : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+                )}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </ToolbarGroup>
+
+        <ToolbarDivider />
+
+        {/* Color swatches */}
+        <ToolbarGroup label="Color">
+          <div className="flex items-center gap-1.5">
+            {visibleColors.map((c) => {
+              const hex = colorToHex(c);
+              const active = c === activeColor;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onColorChange(c)}
+                  aria-pressed={active}
+                  title={c}
+                  className={cn(
+                    'relative h-7 w-7 flex-shrink-0 overflow-hidden rounded-full border-2 transition-transform',
+                    active
+                      ? 'scale-110 border-lsl-ink shadow-lsl-lift'
+                      : 'border-lsl-stone hover:border-lsl-ink',
+                  )}
+                  style={{ background: hex }}
+                >
+                  <span className="sr-only">{c}</span>
+                </button>
+              );
+            })}
+            {overflowColors.length > 0 && (
+              <div className="relative" ref={colorPopRef}>
+                <button
+                  type="button"
+                  onClick={() => setColorsOpen((v) => !v)}
+                  className="flex h-7 items-center gap-1 rounded-full border border-lsl-stone bg-white px-2.5 text-[10px] font-sans uppercase tracking-[0.18em] text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
+                >
+                  More <ChevronDown className="h-3 w-3" strokeWidth={2} />
+                </button>
+                {colorsOpen && (
+                  <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-xl border border-lsl-stone bg-white p-3 shadow-lsl-lift">
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {colors.map((c) => {
+                        const hex = colorToHex(c);
+                        const active = c === activeColor;
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => {
+                              onColorChange(c);
+                              setColorsOpen(false);
+                            }}
+                            title={c}
+                            className={cn(
+                              'relative aspect-square overflow-hidden rounded-full border-2 transition-transform',
+                              active
+                                ? 'scale-110 border-lsl-ink'
+                                : 'border-lsl-stone hover:border-lsl-ink',
+                            )}
+                            style={{ background: hex }}
+                          >
+                            <span className="sr-only">{c}</span>
+                            {active && (
+                              <span className="absolute inset-0 grid place-items-center">
+                                <Check
+                                  className={cn(
+                                    'h-3 w-3',
+                                    isLightColor(c) ? 'text-lsl-ink' : 'text-lsl-cream',
+                                  )}
+                                  strokeWidth={3}
+                                />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 truncate font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                      Active · <span className="text-lsl-ink">{activeColor}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </ToolbarGroup>
+
+        <ToolbarDivider />
+
+        {/* Print area */}
+        <ToolbarGroup label="Print area">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditingPrintArea) onTogglePrintAreaEdit();
+              }}
+              aria-pressed={!isEditingPrintArea}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                !isEditingPrintArea
+                  ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
+                  : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+              )}
+            >
+              Default
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!isEditingPrintArea) onTogglePrintAreaEdit();
+              }}
+              aria-pressed={isEditingPrintArea}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                isEditingPrintArea
+                  ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
+                  : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+              )}
+            >
+              Resize
+            </button>
+            <button
+              type="button"
+              onClick={onResetPrintArea}
+              disabled={!isPrintAreaCustomized}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                isPrintAreaCustomized
+                  ? 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink'
+                  : 'cursor-not-allowed border-lsl-stone/60 bg-white/60 text-lsl-graphite/40',
+              )}
+            >
+              Reset
+            </button>
+          </div>
+        </ToolbarGroup>
+
+        <ToolbarDivider />
+
+        {/* Upload */}
+        <ToolbarGroup label="Logo">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onUploadClick}
+            disabled={isUploadingLogo}
+          >
+            {isUploadingLogo ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />
+            ) : (
+              <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />
+            )}
+            {isUploadingLogo ? 'Uploading…' : 'Upload logo'}
+          </Button>
+        </ToolbarGroup>
+      </div>
+    </div>
+  );
+}
+
+function ToolbarGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-shrink-0 items-center gap-2">
+      <span className="hidden font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite md:inline">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function ToolbarDivider() {
+  return <div className="hidden h-6 w-px flex-shrink-0 bg-lsl-stone md:block" />;
+}
+
 // ─── Stage children ───
 
 function ProductLayer({
   imageUrl,
-  tintHex,
-  applyTint,
   stageSize,
 }: {
   imageUrl: string | null;
-  tintHex: string;
-  applyTint: boolean;
   stageSize: { width: number; height: number };
 }) {
   const [img] = useImage(imageUrl ?? '', 'anonymous');
-  const ref = useRef<Konva.Image>(null);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || !img) return;
-    node.cache();
-    node.getLayer()?.batchDraw();
-  }, [img, applyTint, tintHex]);
 
   if (!img) {
     return (
@@ -921,24 +1122,14 @@ function ProductLayer({
   const x = (stageSize.width - w) / 2;
   const y = (stageSize.height - h) / 2;
 
-  return (
-    <KonvaImage
-      ref={ref}
-      image={img}
-      x={x}
-      y={y}
-      width={w}
-      height={h}
-      // Tinting: only enable filters when applyTint is true.
-      filters={applyTint ? [hexTintFilter(tintHex)] : []}
-    />
-  );
+  return <KonvaImage image={img} x={x} y={y} width={w} height={h} />;
 }
 
 function EditablePrintArea({
   printArea,
   stageSize,
   light,
+  isEditing,
   isSelected,
   onSelect,
   onChange,
@@ -946,6 +1137,7 @@ function EditablePrintArea({
   printArea: { x: number; y: number; width: number; height: number };
   stageSize: { width: number; height: number };
   light: boolean;
+  isEditing: boolean;
   isSelected: boolean;
   onSelect: () => void;
   onChange: (next: { x: number; y: number; width: number; height: number }) => void;
@@ -954,19 +1146,19 @@ function EditablePrintArea({
   const transformerRef = useRef<Konva.Transformer>(null);
 
   useEffect(() => {
-    if (isSelected && transformerRef.current && rectRef.current) {
+    if (isEditing && isSelected && transformerRef.current && rectRef.current) {
       transformerRef.current.nodes([rectRef.current]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
+  }, [isEditing, isSelected]);
 
   const px = printArea.x * stageSize.width;
   const py = printArea.y * stageSize.height;
   const pw = printArea.width * stageSize.width;
   const ph = printArea.height * stageSize.height;
 
-  const baseStroke = light ? 'rgba(11,11,14,0.45)' : 'rgba(247,244,238,0.65)';
-  const selectedStroke = '#003380';
+  const baseStroke = light ? 'rgba(11,11,14,0.45)' : 'rgba(247,244,238,0.75)';
+  const editStroke = '#003380';
 
   return (
     <>
@@ -976,16 +1168,14 @@ function EditablePrintArea({
         y={py}
         width={pw}
         height={ph}
-        stroke={isSelected ? selectedStroke : baseStroke}
-        strokeWidth={isSelected ? 1.5 : 1}
-        dash={isSelected ? [4, 3] : [6, 4]}
+        stroke={isEditing ? editStroke : baseStroke}
+        strokeWidth={isEditing ? 1.5 : 1}
+        dash={isEditing ? [4, 3] : [6, 4]}
         fillEnabled={false}
-        // Make the stroke clickable so logos inside the rect still take clicks,
-        // but the dashed border itself selects the print area for editing.
-        hitStrokeWidth={14}
-        draggable
-        onMouseDown={onSelect}
-        onTap={onSelect}
+        hitStrokeWidth={isEditing ? 14 : 0}
+        draggable={isEditing}
+        onMouseDown={isEditing ? onSelect : undefined}
+        onTap={isEditing ? onSelect : undefined}
         onDragEnd={(e) => {
           const node = e.target;
           onChange({
@@ -1011,7 +1201,7 @@ function EditablePrintArea({
         }}
         perfectDrawEnabled={false}
       />
-      {isSelected && (
+      {isEditing && isSelected && (
         <Transformer
           ref={transformerRef}
           rotateEnabled={false}
@@ -1033,7 +1223,6 @@ function EditablePrintArea({
           boundBoxFunc={(_oldBox, newBox) => {
             const minPx = MIN_PRINT_AREA_FRAC * stageSize.width;
             if (newBox.width < minPx || newBox.height < minPx) return _oldBox;
-            // Keep inside the stage.
             if (newBox.x < 0 || newBox.y < 0) return _oldBox;
             if (newBox.x + newBox.width > stageSize.width) return _oldBox;
             if (newBox.y + newBox.height > stageSize.height) return _oldBox;
@@ -1048,11 +1237,13 @@ function EditablePrintArea({
 function PlacementImage({
   placement,
   isSelected,
+  draggable,
   onSelect,
   onChange,
 }: {
   placement: MockupPlacement;
   isSelected: boolean;
+  draggable: boolean;
   onSelect: () => void;
   onChange: (next: MockupPlacement) => void;
 }) {
@@ -1078,7 +1269,7 @@ function PlacementImage({
         height={placement.height}
         rotation={placement.rotation}
         opacity={placement.opacity}
-        draggable
+        draggable={draggable}
         onMouseDown={onSelect}
         onTap={onSelect}
         onDragEnd={(e) => {
@@ -1139,7 +1330,7 @@ function PanelSection({
 }) {
   return (
     <section className="rounded-2xl border border-lsl-stone bg-white p-4 shadow-lsl-card">
-      <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+      <h3 className="mb-3 font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
         {title}
       </h3>
       {children}
@@ -1215,10 +1406,10 @@ function NumberRow({
   return (
     <label className="block">
       <span className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+        <span className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
           {label}
         </span>
-        <span className="font-mono text-[11px] tabular-nums text-lsl-ink">
+        <span className="font-sans text-[11px] tabular-nums text-lsl-ink">
           {value}
           {suffix}
         </span>
@@ -1269,7 +1460,7 @@ function NoProductSelected({
   return (
     <div className="min-h-screen bg-lsl-cream pt-28 pb-20">
       <div className="mx-auto max-w-2xl px-6 text-center">
-        <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+        <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
           Mockup Studio
         </p>
         <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-lsl-ink">
@@ -1314,27 +1505,3 @@ function measureImage(src: string): Promise<{ width: number; height: number }> {
   });
 }
 
-/**
- * Build a Konva pixel filter that tints the source image toward `hex`.
- * Works well on light/cream source PNGs (the typical product photography baseline).
- * For very dark source images the result will be muted — recommend providing
- * a real color variant in `image_variants` for those.
- */
-function hexTintFilter(hex: string) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return function (this: Konva.Image, imageData: ImageData) {
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3];
-      if (alpha === 0) continue;
-      // luma of source (perceived brightness)
-      const luma = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
-      // multiply blend of target color × luma — preserves shading + highlights
-      data[i] = Math.min(255, r * luma * 1.05);
-      data[i + 1] = Math.min(255, g * luma * 1.05);
-      data[i + 2] = Math.min(255, b * luma * 1.05);
-    }
-  };
-}

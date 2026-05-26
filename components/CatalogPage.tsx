@@ -249,7 +249,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
           />
 
           <div className="mt-6 flex items-baseline justify-between">
-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-graphite">
+            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-graphite">
               {loading
                 ? 'Loading…'
                 : `${filteredProducts.length} product${
@@ -482,11 +482,11 @@ function ProductCard({
           </div>
         )}
 
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-lsl-stone bg-white/95 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-ink shadow-lsl-card backdrop-blur-sm">
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full border border-lsl-stone bg-white/95 px-2.5 py-1 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-ink shadow-lsl-card backdrop-blur-sm">
           {product.category}
         </span>
         {product.featured && (
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-lsl-thread/40 bg-lsl-thread/15 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-thread shadow-lsl-card backdrop-blur-sm">
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-lsl-thread/40 bg-lsl-thread/15 px-2.5 py-1 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-thread shadow-lsl-card backdrop-blur-sm">
             <Sparkles className="h-2.5 w-2.5" strokeWidth={2} /> Popular
           </span>
         )}
@@ -502,7 +502,7 @@ function ProductCard({
 
       <div className="flex flex-1 flex-col p-5">
         {product.brand && (
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+          <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
             {product.brand}
           </p>
         )}
@@ -515,7 +515,7 @@ function ProductCard({
           </span>
         </div>
         {(product.style_number || product.item_number || product.sku) && (
-          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+          <p className="mt-1 font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
             {product.style_number
               ? `Style ${product.style_number}`
               : `Item ${product.item_number || product.sku}`}
@@ -701,28 +701,28 @@ function ProductModal({
 
         <div className="flex flex-1 flex-col overflow-y-auto p-7 md:w-1/2 md:p-9">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-lsl-stone bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+            <span className="rounded-full border border-lsl-stone bg-white px-2.5 py-1 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
               {product.category}
             </span>
             {product.style_number && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+              <span className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
                 Style {product.style_number}
               </span>
             )}
             {product.item_number && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+              <span className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
                 Item {product.item_number}
               </span>
             )}
             {!product.style_number && !product.item_number && product.sku && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+              <span className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
                 SKU {product.sku}
               </span>
             )}
           </div>
 
           {product.brand && (
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="mt-3 font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
               {product.brand}
             </p>
           )}
@@ -759,7 +759,7 @@ function ProductModal({
 
           {addonRuleLines.length > 0 && (
             <div className="mt-5 rounded-xl border border-lsl-stone bg-white/60 p-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+              <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
                 Add-ons &amp; upcharges
               </p>
               <ul className="mt-2 space-y-1.5">
@@ -778,7 +778,7 @@ function ProductModal({
 
           <div className="mt-6 space-y-5">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+              <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
                 Color · <span className="text-lsl-ink">{selectedColor}</span>
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -804,7 +804,7 @@ function ProductModal({
             </div>
 
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+              <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
                 Size · <span className="text-lsl-ink">{selectedSize}</span>
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -830,7 +830,7 @@ function ProductModal({
             </div>
 
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+              <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
                 Quantity
               </p>
               <div className="mt-2 flex items-center gap-3">
@@ -849,7 +849,7 @@ function ProductModal({
                   onChange={(e) =>
                     setQuantity(Math.max(1, parseInt(e.target.value || '1', 10)))
                   }
-                  className="h-11 w-20 rounded-lg border border-lsl-stone bg-white text-center font-mono text-base tabular-nums text-lsl-ink focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
+                  className="h-11 w-20 rounded-lg border border-lsl-stone bg-white text-center font-sans text-base tabular-nums text-lsl-ink focus:border-lsl-navy focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
                 />
                 <button
                   type="button"

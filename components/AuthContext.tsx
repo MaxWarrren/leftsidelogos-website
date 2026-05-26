@@ -130,10 +130,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Sign In ───
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
     setIsAuthModalOpen(false);
+
+    // One-time backfill: legacy users created before org-required-at-signup
+    // may have zero memberships. Auto-create "{Name}'s Account" so every
+    // signed-in user has an org. Best-effort, non-blocking.
+    const signedInUser = data?.user;
+    if (signedInUser) {
+      backfillOrgIfMissing(signedInUser.id).catch((err) => {
+        console.warn('Org backfill skipped:', err);
+      });
+    }
     return { error: null };
+  };
+
+  // Look up org membership count for a user; if zero AND we can resolve a
+  // display name, spin up "{Name}'s Account" and add them as owner.
+  const backfillOrgIfMissing = async (userId: string) => {
+    const { count, error: countErr } = await supabase
+      .from('organization_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    if (countErr) return;
+    if ((count ?? 0) > 0) return;
+
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .single();
+    const fullName = profileRow?.full_name?.trim();
+    if (!fullName) return;
+
+    await createOrganizationForUser(userId, `${fullName}'s Account`);
   };
 
   // ─── Sign Up (with org auto-creation) ───
@@ -162,9 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: null, needsConfirmation: true };
     }
 
-    // If auto-confirmed (e.g. in dev), create org now
+    // If auto-confirmed (e.g. in dev), create org now. Surface any failure
+    // back to the caller so the modal can display it — we can't roll back the
+    // auth.users insert from the browser, so this is best-effort.
     if (data.user && data.session) {
-      await createOrganizationForUser(data.user.id, orgName);
+      const orgErr = await createOrganizationForUser(data.user.id, orgName);
+      if (orgErr) {
+        return { error: orgErr, needsConfirmation: false };
+      }
       setIsAuthModalOpen(false);
     }
 
@@ -172,7 +208,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ─── Create Organization ───
-  const createOrganizationForUser = async (userId: string, orgName: string) => {
+  // Returns a non-null error string if either insert failed so callers can
+  // surface it to the user. Supabase doesn't expose client-side transactions,
+  // so this is best-effort — the auth.users row is left intact on failure.
+  const createOrganizationForUser = async (
+    userId: string,
+    orgName: string,
+  ): Promise<string | null> => {
     // Generate a random 8-character access code
     const accessCode = Math.random().toString(36).substring(2, 10).toUpperCase();
 
@@ -185,7 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (orgError || !org) {
       console.error('Failed to create organization:', orgError);
-      return;
+      return orgError?.message ?? 'Failed to create your workspace.';
     }
 
     // Add user as owner
@@ -199,10 +241,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (memberError) {
       console.error('Failed to add user to organization:', memberError);
-      return;
+      return memberError.message;
     }
 
     setOrganization(org);
+    return null;
   };
 
   // ─── Sign Out ───

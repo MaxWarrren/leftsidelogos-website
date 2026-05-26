@@ -112,7 +112,7 @@ export const PortalOrders: React.FC = () => {
                                 {/* Header */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-gray-50">
                                     <div className="space-y-1">
-                                        <p className="text-xs font-mono font-semibold text-gray-400 uppercase tracking-wider">
+                                        <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider">
                                             ORD-{order.id.substring(0, 8)}
                                         </p>
                                         <h3 className="text-2xl font-bold text-lsl-black">{order.name}</h3>

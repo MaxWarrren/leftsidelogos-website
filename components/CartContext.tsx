@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { CartItem, GroupedCartItem } from '../types';
+import { useAuth } from './AuthContext';
 
 // ─── Context Shape ───
 
@@ -49,11 +50,30 @@ function saveCart(items: CartItem[]) {
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>(loadCart);
+  const { isAuthenticated } = useAuth();
 
   // Persist on change
   useEffect(() => {
     saveCart(items);
   }, [items]);
+
+  // Clear the cart when the user signs out. We only fire on actual auth
+  // transitions (true → false) so the very first mount — when isAuthenticated
+  // is briefly false while the session is being restored — doesn't wipe a
+  // guest cart that the user has been building.
+  const prevAuthRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const prev = prevAuthRef.current;
+    prevAuthRef.current = isAuthenticated;
+    if (prev === true && isAuthenticated === false) {
+      setItems([]);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [isAuthenticated]);
 
   const addToCart = useCallback((item: Omit<CartItem, 'id'>) => {
     const id = makeId(item.productId, item.color, item.size);

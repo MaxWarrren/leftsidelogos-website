@@ -34,7 +34,7 @@ export const OrderBuilderStepper: React.FC<OrderBuilderStepperProps> = ({
   return (
     <div className="sticky top-16 z-30 -mx-6 border-b border-lsl-stone bg-lsl-cream/90 px-6 py-3 backdrop-blur-md md:top-[72px] md:-mx-10 md:px-10">
       <div className="mx-auto flex max-w-3xl items-center gap-3 md:gap-5">
-        <p className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite md:block">
+        <p className="hidden font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite md:block">
           Progress
         </p>
         <ol className="flex flex-1 items-center gap-2 md:gap-3" aria-label="Order builder progress">
@@ -50,7 +50,7 @@ export const OrderBuilderStepper: React.FC<OrderBuilderStepperProps> = ({
                 >
                   <span
                     className={cn(
-                      'grid h-7 w-7 flex-shrink-0 place-items-center rounded-full border-2 font-mono text-[11px] font-semibold tabular-nums transition-colors',
+                      'grid h-7 w-7 flex-shrink-0 place-items-center rounded-full border-2 font-sans text-[11px] font-semibold tabular-nums transition-colors',
                       stateStyles[step.state],
                     )}
                   >
@@ -92,7 +92,7 @@ export const OrderBuilderStepper: React.FC<OrderBuilderStepperProps> = ({
               transition={{ duration: 0.35, ease: 'easeOut' }}
             />
           </div>
-          <span className="font-mono text-[10px] tabular-nums text-lsl-graphite">
+          <span className="font-sans text-[10px] tabular-nums text-lsl-graphite">
             {completedCount}/{steps.length}
           </span>
         </div>

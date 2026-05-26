@@ -69,7 +69,7 @@ export const Footer: React.FC = () => {
             variants={columnVariants}
             className="md:col-span-3"
           >
-            <h4 className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
+            <h4 className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
               Workshop
             </h4>
             <div className="mt-5 space-y-4 text-sm">
@@ -97,7 +97,7 @@ export const Footer: React.FC = () => {
                   className="h-4 w-4 text-lsl-thread"
                   strokeWidth={1.75}
                 />
-                <span className="font-mono tabular-nums">314-583-5431</span>
+                <span className="font-sans tabular-nums">314-583-5431</span>
               </a>
             </div>
           </motion.div>
@@ -110,7 +110,7 @@ export const Footer: React.FC = () => {
             variants={columnVariants}
             className="md:col-span-4"
           >
-            <h4 className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
+            <h4 className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
               Hours
             </h4>
             <ul className="mt-5 space-y-2 text-sm">
@@ -166,8 +166,8 @@ function HoursRow({
       <span
         className={
           muted
-            ? 'font-mono text-xs text-lsl-cream/40'
-            : 'font-mono text-xs tabular-nums text-lsl-cream'
+            ? 'font-sans text-xs text-lsl-cream/40'
+            : 'font-sans text-xs tabular-nums text-lsl-cream'
         }
       >
         {hours}

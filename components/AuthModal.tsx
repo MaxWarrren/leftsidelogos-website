@@ -121,16 +121,19 @@ export const AuthModal: React.FC = () => {
       setLoading(false);
       return;
     }
-    if (!signupOrg.trim()) {
-      setError('Organization name is required.');
+    if (!signupName.trim()) {
+      setError('Please add your name.');
       setLoading(false);
       return;
     }
+    // Empty org name → auto-fall-back to "{Name}'s Account". The signup form
+    // already shows an inline note explaining this so it's not a surprise.
+    const resolvedOrg = signupOrg.trim() || `${signupName.trim()}'s Account`;
     const result = await signUp(
       signupEmail,
       signupPassword,
       signupName,
-      signupOrg,
+      resolvedOrg,
     );
     if (result.error) setError(result.error);
     else if (result.needsConfirmation) {
@@ -383,7 +386,7 @@ function FieldWrap({
   return (
     <label className="block">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+        <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
           {label}
         </span>
         {hint && (
@@ -553,16 +556,25 @@ function SignupForm(props: {
           <input
             type="text"
             autoComplete="organization"
-            required
             value={props.org}
             onChange={(e) => props.onOrg(e.target.value)}
-            placeholder="Westview High Athletics"
+            placeholder="e.g. Riverside Soccer Club"
             className={inputCls}
           />
         </div>
-        <p className="mt-1 pl-1 text-[11px] text-lsl-graphite">
-          We&apos;ll create a portal for your team. Members join later with an access code.
-        </p>
+        {props.org.trim() ? (
+          <p className="mt-1 pl-1 text-[11px] text-lsl-graphite">
+            We&apos;ll create a portal for your team. Members join later with an access code.
+          </p>
+        ) : (
+          <p className="mt-1 pl-1 text-[11px] text-lsl-graphite">
+            We&apos;ll set up your account as{' '}
+            <span className="font-semibold text-lsl-ink">
+              {(props.name.trim() || 'Your Name')}&apos;s Account
+            </span>
+            {' '}— you can rename it later.
+          </p>
+        )}
       </FieldWrap>
 
       <FieldWrap label="Email">

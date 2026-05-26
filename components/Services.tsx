@@ -23,14 +23,13 @@ type Service = {
   tag?: string;
 };
 
-const featuredService: Service = {
-  icon: Scissors,
-  title: 'Embroidery',
-  desc: 'Premium thread on polos, hats, and outerwear. Digitized in-house so the stitch sits exactly where it should — sharp logos, no puckering, no excuses.',
-  tag: 'Signature service',
-};
-
 const services: Service[] = [
+  {
+    icon: Scissors,
+    title: 'Embroidery',
+    desc: 'Premium thread on polos, hats, and outerwear. Digitized in-house so the stitch sits exactly where it should.',
+    tag: 'Signature service',
+  },
   {
     icon: Flame,
     title: 'Heat transfer',
@@ -119,10 +118,13 @@ export const Services: React.FC = () => {
           intro="Six in-house production methods. One project manager. Zero ‘we’ll get back to you’."
         />
 
-        <div className="mt-16 grid gap-5 md:grid-cols-6">
-          <FeaturedCard service={featuredService} />
-          {services.map((service) => (
-            <ServiceCard key={service.title} service={service} />
+        <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {services.map((service, idx) => (
+            <ServiceCard
+              key={service.title}
+              service={service}
+              anchor={idx === 0}
+            />
           ))}
         </div>
 
@@ -132,56 +134,47 @@ export const Services: React.FC = () => {
   );
 };
 
-function FeaturedCard({ service }: { service: Service }) {
+function ServiceCard({ service, anchor = false }: { service: Service; anchor?: boolean }) {
   const Icon = service.icon;
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative isolate flex min-h-[320px] flex-col justify-between overflow-hidden rounded-3xl border border-lsl-stone bg-lsl-ink p-8 text-lsl-cream shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lsl-lift md:col-span-3 md:row-span-2 md:p-10"
-    >
-      <div className="pointer-events-none absolute -right-12 -top-10 -z-10 h-72 w-72 rounded-full bg-lsl-thread/25 blur-[110px]" />
-      <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.08]"
-        style={{
-          backgroundImage:
-            'repeating-linear-gradient(135deg, #F7F4EE 0 1px, transparent 1px 16px)',
-        }}
-      />
-
-      <div className="flex items-start justify-between gap-4">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-lsl-cream/15 bg-lsl-cream/5 text-lsl-thread">
-          <Icon className="h-6 w-6" strokeWidth={1.5} />
+  if (anchor) {
+    return (
+      <motion.article
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="group relative isolate flex flex-col overflow-hidden rounded-2xl border border-lsl-ink bg-lsl-ink p-6 text-lsl-cream shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lsl-lift"
+      >
+        <div className="pointer-events-none absolute -right-12 -top-10 -z-10 h-56 w-56 rounded-full bg-lsl-thread/25 blur-[100px]" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl border border-lsl-cream/15 bg-lsl-cream/5 text-lsl-thread">
+            <Icon className="h-5 w-5" strokeWidth={1.5} />
+          </div>
+          {service.tag && (
+            <span className="rounded-full border border-lsl-thread/40 bg-lsl-thread/10 px-2.5 py-1 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-thread">
+              {service.tag}
+            </span>
+          )}
         </div>
-        {service.tag && (
-          <span className="rounded-full border border-lsl-thread/40 bg-lsl-thread/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-thread">
-            {service.tag}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-12">
-        <h3 className="font-display text-3xl font-semibold leading-tight text-lsl-cream md:text-4xl">
+        <h3 className="mt-5 font-display text-xl font-semibold leading-tight text-lsl-cream">
           {service.title}
         </h3>
-        <p className="mt-3 max-w-[40ch] text-sm leading-relaxed text-lsl-cream/75 md:text-base">
+        <p className="mt-2 text-sm leading-relaxed text-lsl-cream/75">
           {service.desc}
         </p>
-      </div>
-    </motion.article>
-  );
-}
-
-function ServiceCard({ service }: { service: Service }) {
-  const Icon = service.icon;
+        <p className="mt-4 font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-thread">
+          Our signature craft →
+        </p>
+      </motion.article>
+    );
+  }
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex flex-col rounded-2xl border border-lsl-stone bg-white p-6 shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift md:col-span-3 lg:col-span-3"
+      className="group relative flex flex-col rounded-2xl border border-lsl-stone bg-white p-6 shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift"
     >
       <div className="grid h-10 w-10 place-items-center rounded-xl bg-lsl-navy/8 text-lsl-navy">
         <Icon className="h-5 w-5" strokeWidth={1.5} />
@@ -207,7 +200,7 @@ function SectionHeader({
 }) {
   return (
     <div className="max-w-3xl">
-      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+      <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
         {eyebrow}
       </p>
       <h2 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl lg:text-[3.5rem]">
@@ -255,7 +248,7 @@ function MobileStep({ step }: { step: Step }) {
         <div className="grid h-12 w-12 place-items-center rounded-full bg-lsl-navy text-lsl-cream">
           <Icon className="h-5 w-5" strokeWidth={1.5} />
         </div>
-        <span className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite tabular-nums">
+        <span className="mt-2 font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite tabular-nums">
           Step 0{step.id}
         </span>
       </div>
@@ -312,7 +305,7 @@ function DesktopTimeline({ steps }: { steps: Step[] }) {
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
                 <span className="sr-only">{step.title}</span>
               </button>
-              <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.2em] tabular-nums text-lsl-graphite">
+              <p className="mt-4 font-sans text-[10px] uppercase tracking-[0.2em] tabular-nums text-lsl-graphite">
                 Step 0{step.id}
               </p>
               <h4

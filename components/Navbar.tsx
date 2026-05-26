@@ -244,7 +244,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     {item.name}
                     {currentPage === item.page && (
-                      <span className="text-xs font-mono uppercase tracking-widest text-lsl-thread">
+                      <span className="text-xs font-sans uppercase tracking-widest text-lsl-thread">
                         Now
                       </span>
                     )}
@@ -315,7 +315,7 @@ function CartButton({
             exit={{ scale: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 22 }}
             className={cn(
-              'absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full px-1 font-mono text-[10px] font-semibold tabular-nums',
+              'absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full px-1 font-sans text-[10px] font-semibold tabular-nums',
               overHero
                 ? 'bg-lsl-cream text-lsl-ink'
                 : 'bg-lsl-navy text-lsl-cream',
