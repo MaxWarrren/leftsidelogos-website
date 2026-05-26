@@ -52,12 +52,21 @@ function Hero({ onStartDesigning }: HeroProps) {
     <section
       id="home"
       aria-label="Custom merchandise hero"
-      className="relative isolate overflow-hidden bg-lsl-navy text-lsl-cream"
+      className="relative isolate overflow-hidden bg-lsl-ink text-lsl-cream"
     >
+      {/* Workshop photo */}
+      <img
+        src="/hero-bg.png"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-30 h-full w-full object-cover"
+      />
+      {/* Navy tint so the photo reads as brand, not stock. Strong on left where
+         the copy lives, softer on the right to let the workshop scene through. */}
+      <div className="pointer-events-none absolute inset-0 -z-20 bg-gradient-to-r from-lsl-ink/95 via-lsl-navy/80 to-lsl-navy/55" />
+      <div className="pointer-events-none absolute inset-0 -z-20 bg-gradient-to-t from-lsl-ink/70 via-transparent to-lsl-ink/30" />
       <StitchGrid />
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-lsl-navy via-lsl-navy to-lsl-navy-700" />
-      <div className="pointer-events-none absolute -top-32 right-[-12%] -z-10 h-[520px] w-[520px] rounded-full bg-lsl-thread/15 blur-[160px]" />
-      <div className="pointer-events-none absolute bottom-[-30%] left-[-10%] -z-10 h-[560px] w-[560px] rounded-full bg-lsl-cream/10 blur-[180px]" />
+      <div className="pointer-events-none absolute -top-32 right-[-12%] -z-10 h-[520px] w-[520px] rounded-full bg-lsl-thread/20 blur-[160px]" />
 
       <div className="mx-auto flex min-h-[100svh] max-w-7xl flex-col px-6 pb-12 pt-28 md:px-10 md:pt-32">
         <div className="flex flex-1 flex-col items-start justify-center">

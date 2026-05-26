@@ -172,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               ) : (
                 <button
                   type="button"
-                  onClick={openAuthModal}
+                  onClick={() => openAuthModal()}
                   className={cn(
                     'ml-2 h-9 rounded-full px-4 text-xs font-semibold uppercase tracking-wider transition-all',
                     overHero

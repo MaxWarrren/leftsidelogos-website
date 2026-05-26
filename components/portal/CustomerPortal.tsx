@@ -33,7 +33,7 @@ export const CustomerPortal: React.FC = () => {
                         Please log in to view your orders, media, and messages.
                     </p>
                     <button
-                        onClick={openAuthModal}
+                        onClick={() => openAuthModal()}
                         className="px-8 py-4 bg-lsl-blue text-white rounded-xl font-bold hover:-translate-y-1 transition-all hover:shadow-lg"
                     >
                         Log In

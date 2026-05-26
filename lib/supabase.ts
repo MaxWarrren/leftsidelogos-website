@@ -36,8 +36,14 @@ export async function getAllProducts() {
       slug,
       category_id,
       sku,
+      brand,
+      item_number,
+      style_number,
+      source_url,
       description,
       images,
+      images_by_color,
+      addon_rules,
       colors,
       sizes,
       base_price,
@@ -52,7 +58,7 @@ export async function getAllProducts() {
 
   if (error) {
     // Retry without the new columns so we keep working before the migration is applied.
-    if (/image_variants|print_areas|base_color/.test(error.message)) {
+    if (/image_variants|print_areas|base_color|brand|item_number|style_number|source_url|images_by_color|addon_rules/.test(error.message)) {
       const { data: legacy, error: legacyError } = await supabase
         .from('catalog_products')
         .select(`

@@ -103,6 +103,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!group.mockupUrl && item.mockupUrl) {
           group.mockupUrl = item.mockupUrl;
         }
+        // Union the sourceLogoUrls across all line items of this product.
+        if (item.sourceLogoUrls?.length) {
+          const merged = new Set([
+            ...(group.sourceLogoUrls ?? []),
+            ...item.sourceLogoUrls,
+          ]);
+          group.sourceLogoUrls = Array.from(merged);
+        }
       } else {
         map.set(item.productId, {
           productId: item.productId,
@@ -112,6 +120,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           basePrice: item.basePrice,
           image: item.image,
           mockupUrl: item.mockupUrl || null,
+          sourceLogoUrls: item.sourceLogoUrls ? [...item.sourceLogoUrls] : undefined,
           variants: [variant],
           totalQuantity: item.quantity,
           subtotal: item.quantity * item.basePrice,

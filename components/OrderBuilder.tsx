@@ -88,6 +88,22 @@ export const OrderBuilder: React.FC<{
   const cartTotal = getCartTotal();
   const cartCount = getCartCount();
 
+  // ─── Hard auth gate ───
+  // OrderBuilder is now sign-in-required. If the visitor isn't authenticated,
+  // we open the AuthModal in required+signup mode and render a FullPageAuthGate
+  // behind it so nothing else paints. Closing the modal returns the customer
+  // to the catalog.
+  useEffect(() => {
+    if (isAuthenticated) return;
+    openAuthModal({
+      mode: 'signup',
+      required: true,
+      message: 'Create an account or sign in to start your project.',
+      onClose: () => onNavigateToCatalog?.(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   const defaultDraft: OrderDraft = {
     contact: { email: '', name: '', company: '' },
     useCase: null,
@@ -175,6 +191,42 @@ export const OrderBuilder: React.FC<{
     });
     return () => observer.disconnect();
   }, []);
+
+  // Auto-attach raw logos that were uploaded inside MockupStudio. Whenever the
+  // cart changes, collect unique sourceLogoUrls and merge them into logoMedia
+  // (skipping URLs that are already attached, so manual deletes stick).
+  useEffect(() => {
+    const cartLogoUrls = Array.from(
+      new Set(
+        groupedItems
+          .flatMap((g) => g.sourceLogoUrls ?? [])
+          .filter((u): u is string => !!u),
+      ),
+    );
+    if (cartLogoUrls.length === 0) return;
+    setDraft((d) => {
+      const existing = new Set(d.logoMedia.map((m) => m.file_path));
+      const additions: MediaItem[] = cartLogoUrls
+        .filter((url) => !existing.has(url))
+        .map((url) => {
+          const filename = url.split('/').pop() || 'mockup-logo';
+          return {
+            id: url,
+            file_path: url,           // we store the public URL directly; submit reads it as-is
+            file_name: filename,
+            file_type: 'image/*',
+            size: 0,
+            category: 'Brand Assets',
+            created_at: new Date().toISOString(),
+            uploader_id: user?.id ?? '',
+            source: 'mockup-studio',
+          } as MediaItem;
+        });
+      if (additions.length === 0) return d;
+      return { ...d, logoMedia: [...d.logoMedia, ...additions].slice(0, 3) };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupedItems.map((g) => (g.sourceLogoUrls || []).join(',')).join('|')]);
 
   const setRef = (id: string) => (el: HTMLElement | null) => {
     sectionRefs.current[id] = el;
@@ -289,10 +341,11 @@ export const OrderBuilder: React.FC<{
 
   const onDropFiles = async (files: FileList | File[]) => {
     setIsDragging(false);
-    if (!isAuthenticated || !organization) {
-      toast.info('Log in first', {
-        description: 'Sign in to upload logos directly. Your project draft is saved.',
-        action: { label: 'Log in', onClick: openAuthModal },
+    if (!isAuthenticated || !user) {
+      // Should not happen — the page-level auth gate prevents this — but keep
+      // the toast as a safety net.
+      toast.info('Sign in to upload', {
+        action: { label: 'Sign in', onClick: () => openAuthModal({ required: true }) },
       });
       return;
     }
@@ -303,28 +356,43 @@ export const OrderBuilder: React.FC<{
       return;
     }
     const toUpload = arr.slice(0, remainingSlots);
+
+    // Pick the right bucket + path scheme. If the user already has an org,
+    // continue writing to organization-assets (admin tools expect that path).
+    // Otherwise scope to the new user-uploads bucket keyed by auth.uid.
+    const bucket = organization ? 'organization-assets' : 'user-uploads';
+    const pathPrefix = organization
+      ? `${organization.id}/uploads`
+      : `${user.id}/order-uploads`;
+
     const uploadedIds: string[] = [];
     for (const file of toUpload) {
       const safeName = `${Date.now()}-${file.name.replace(/[^a-z0-9._-]+/gi, '_')}`;
-      const file_path = `${organization.id}/uploads/${safeName}`;
+      const file_path = `${pathPrefix}/${safeName}`;
       const { error } = await supabase.storage
-        .from('organization-assets')
+        .from(bucket)
         .upload(file_path, file, { upsert: false });
       if (error) {
         toast.error('Upload failed', { description: error.message });
         continue;
       }
+      // For the user-uploads bucket, store the public URL directly so submit
+      // doesn't need bucket knowledge to resolve it.
+      const storedPath = organization
+        ? file_path
+        : supabase.storage.from(bucket).getPublicUrl(file_path).data.publicUrl;
       const item: MediaItem = {
-        id: file_path,
-        file_path,
+        id: storedPath,
+        file_path: storedPath,
         file_name: file.name,
         file_type: file.type,
         size: file.size,
         category: 'Brand Assets',
         created_at: new Date().toISOString(),
-        uploader_id: user?.id ?? '',
+        uploader_id: user.id,
+        source: 'upload',
       };
-      uploadedIds.push(file_path);
+      uploadedIds.push(storedPath);
       updateDraft({ logoMedia: [...draft.logoMedia, item] });
     }
     if (uploadedIds.length) {
@@ -365,13 +433,19 @@ export const OrderBuilder: React.FC<{
 
     setIsGenerating(true);
     try {
-      // Resolve logo file URLs (already in organization-assets storage).
+      // Resolve logo file URLs. Each media item's file_path is either a
+      // storage object path (org-scoped uploads) or already a full public URL
+      // (mockup-studio attachments or user-uploads bucket entries).
       const fileUrls: string[] = [];
       for (const media of draft.logoMedia) {
-        const { data: urlData } = supabase.storage
-          .from('organization-assets')
-          .getPublicUrl(media.file_path);
-        fileUrls.push(urlData.publicUrl);
+        if (/^https?:\/\//i.test(media.file_path)) {
+          fileUrls.push(media.file_path);
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('organization-assets')
+            .getPublicUrl(media.file_path);
+          fileUrls.push(urlData.publicUrl);
+        }
       }
 
       // Upload mockup if present (existing flow).
@@ -442,11 +516,11 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
         organization?.name || draft.contact.company || draft.contact.name
       } - Website Order`;
 
-      const isGuest = !isAuthenticated || !organization;
-
-      // Authenticated path inserts an order; guest path posts a lead row through n8n.
+      // Authenticated submission: either an `orders` insert (org members) or
+      // a `leads` insert (signed-up users without an org yet). user_id is
+      // always populated since OrderBuilder is hard-gated by auth.
       let createdOrderId: string | null = null;
-      if (!isGuest && organization) {
+      if (organization) {
         const orderData = {
           organization_id: organization.id,
           name: orderName,
@@ -470,9 +544,10 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
         createdOrderId = insert?.id ?? null;
       }
 
-      // Webhook payload (carries everything n8n needs, including guest leads).
+      // Webhook payload — n8n still owns the lead row insert. We pass user_id
+      // so the leads.user_id column gets populated and admin can link the
+      // authenticated user when converting the lead to an org.
       const webhookPayload = {
-        is_guest: isGuest,
         order_id: createdOrderId,
         organization_id: organization?.id ?? null,
         organization_name: organization?.name ?? draft.contact.company ?? null,
@@ -484,6 +559,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
         details: cartBreakdown,
         description: descParts.join('\n'),
         source: 'website',
+        user_id: user?.id ?? null,
         submitted_by: user?.id ?? null,
         user_email: profile?.email ?? draft.contact.email,
         user_name: profile?.full_name ?? draft.contact.name,
@@ -539,6 +615,35 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
 
   // ─── Render ───
 
+  // Hard auth gate — render a calm full-page block behind the forced AuthModal.
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-lsl-cream pt-24 pb-24">
+        <div className="mx-auto max-w-xl px-6 text-center">
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            Order Builder
+          </p>
+          <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-lsl-ink">
+            Sign in to start your project.
+          </h1>
+          <p className="mt-4 text-base leading-relaxed text-lsl-graphite">
+            A free account lets us save your draft, store your logos, and send
+            you proofs and quotes the moment they&apos;re ready.
+          </p>
+          {onNavigateToCatalog && (
+            <button
+              type="button"
+              onClick={onNavigateToCatalog}
+              className="mt-8 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-graphite hover:text-lsl-ink"
+            >
+              ← Back to catalog
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (isSubmitted) {
     return (
       <SuccessScreen
@@ -585,25 +690,11 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
               title="How can we reach you?"
               subtitle="No spam. We use this only for proofs, the quote, and your invoice."
             >
-              {isAuthenticated && profile ? (
+              {profile && (
                 <SignedInBlock
                   profile={profile}
                   organization={organization}
                 />
-              ) : (
-                <div className="mb-4 rounded-xl border border-lsl-stone bg-white p-4">
-                  <p className="text-sm text-lsl-graphite">
-                    Continuing as a guest is fine — or{' '}
-                    <button
-                      type="button"
-                      onClick={openAuthModal}
-                      className="font-medium text-lsl-navy underline-offset-4 hover:underline"
-                    >
-                      log in
-                    </button>{' '}
-                    to save this project to your portal.
-                  </p>
-                </div>
               )}
 
               <div className="grid gap-4 md:grid-cols-2">

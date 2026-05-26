@@ -7,12 +7,16 @@ import { useAuth } from './AuthContext';
 export type MediaItem = {
     id: string;
     file_name: string;
+    // Either an organization-scoped storage path OR a full public URL
+    // (logos imported from MockupStudio via the user-uploads bucket).
     file_path: string;
     file_type: string;
     size: number;
     category: 'Brand Assets' | 'Mockups' | 'Final Designs';
     created_at: string;
     uploader_id: string;
+    // Tags where this item came from. 'mockup-studio' = auto-attached from cart.
+    source?: 'upload' | 'mockup-studio';
 };
 
 interface MediaPickerProps {

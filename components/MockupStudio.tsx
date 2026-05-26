@@ -22,7 +22,10 @@ import {
   Copy,
   Crop,
   Download,
+  Loader2,
   Maximize2,
+  Minus,
+  Plus,
   ShoppingBag,
   Trash2,
   Upload,
@@ -33,6 +36,8 @@ import { cn } from '../lib/utils';
 import { colorToHex, isLightColor, normalizeColorKey } from '../lib/colors';
 import { useCart } from './CartContext';
 import { useCartDrawer } from './CartDrawer';
+import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 import { toast } from './ui/toaster';
 import type {
   CatalogProduct,
@@ -45,6 +50,8 @@ import type {
 const DEFAULT_PRINT_AREA = { x: 0.32, y: 0.26, width: 0.36, height: 0.34 };
 const STAGE_ASPECT = 1; // square canvas
 const MAX_LOGO_BYTES = 8 * 1024 * 1024;
+const PRINT_AREA_ID = '__print_area__';
+const MIN_PRINT_AREA_FRAC = 0.08; // never shrink below 8% of stage in either dimension
 
 // ─── Public component ───
 
@@ -81,6 +88,8 @@ function Studio({
 }) {
   const { addToCart } = useCart();
   const { openDrawer } = useCartDrawer();
+  const { user, isAuthenticated, openAuthModal } = useAuth();
+  void onNavigateToBuildOrder; // Add-to-project now stays on this page.
 
   // Available angles, derived from `image_variants` (falls back to a synthetic "front" using images[0]).
   const angles = useMemo(() => {
@@ -105,6 +114,19 @@ function Studio({
     product.base_color ?? product.colors[0] ?? 'Black',
   );
 
+  // In-page cart form state — replaces the old top-bar "Save & add" button.
+  const [selectedSize, setSelectedSize] = useState<string>(
+    product.sizes[0] ?? '',
+  );
+  const [quantity, setQuantity] = useState<number>(12);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+
+  // Public URLs of raw logo files the customer has uploaded during this
+  // session. Persisted into each cart line so OrderBuilder Step 4 can auto-
+  // attach them without re-upload.
+  const [uploadedLogoUrls, setUploadedLogoUrls] = useState<string[]>([]);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
   // Per-angle placements. Each entry is the layer stack for that view.
   const [placementsByAngle, setPlacementsByAngle] = useState<
     Record<string, MockupPlacement[]>
@@ -112,6 +134,37 @@ function Studio({
   const placements = placementsByAngle[activeAngle] ?? [];
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Customer overrides for the print area, per angle. Stored as normalized
+  // 0-1 rects so they survive stage resize. Falls back to product props.
+  const [printAreaOverrides, setPrintAreaOverrides] = useState<ProductPrintAreas>({});
+  const currentPrintArea = useMemo(
+    () =>
+      printAreaOverrides[activeAngle] ??
+      printAreas[activeAngle] ??
+      DEFAULT_PRINT_AREA,
+    [printAreaOverrides, printAreas, activeAngle],
+  );
+  const setPrintAreaForActiveAngle = useCallback(
+    (next: { x: number; y: number; width: number; height: number }) => {
+      const clamped = {
+        x: Math.max(0, Math.min(1 - MIN_PRINT_AREA_FRAC, next.x)),
+        y: Math.max(0, Math.min(1 - MIN_PRINT_AREA_FRAC, next.y)),
+        width: Math.max(MIN_PRINT_AREA_FRAC, Math.min(1 - next.x, next.width)),
+        height: Math.max(MIN_PRINT_AREA_FRAC, Math.min(1 - next.y, next.height)),
+      };
+      setPrintAreaOverrides((prev) => ({ ...prev, [activeAngle]: clamped }));
+    },
+    [activeAngle],
+  );
+  const resetPrintArea = useCallback(() => {
+    setPrintAreaOverrides((prev) => {
+      const next = { ...prev };
+      delete next[activeAngle];
+      return next;
+    });
+  }, [activeAngle]);
+  const isPrintAreaCustomized = !!printAreaOverrides[activeAngle];
 
   // Canvas sizing: fill the available column, square.
   const stageWrapRef = useRef<HTMLDivElement>(null);
@@ -188,7 +241,7 @@ function Studio({
   };
 
   const fitToPrintArea = (id: string) => {
-    const area = printAreas[activeAngle] ?? DEFAULT_PRINT_AREA;
+    const area = currentPrintArea;
     updatePlacements((current) =>
       current.map((p) =>
         p.id === id
@@ -209,36 +262,78 @@ function Studio({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFiles = async (files: FileList | File[]) => {
+    // Snapshot to an array immediately — FileList is a live ref on many
+    // browsers and gets cleared when the input value resets.
     const arr = Array.from(files).filter((f) => f.type.startsWith('image/'));
     if (!arr.length) {
       toast.error('Pick an image file', { description: 'PNG, JPG, or SVG.' });
       return;
     }
-    for (const file of arr) {
-      if (file.size > MAX_LOGO_BYTES) {
-        toast.error(`${file.name} is too large`, {
-          description: 'Max logo size is 8MB.',
-        });
-        continue;
+    setIsUploadingLogo(true);
+    let placedAnyForUnauthed = false;
+    try {
+      for (const file of arr) {
+        if (file.size > MAX_LOGO_BYTES) {
+          toast.error(`${file.name} is too large`, {
+            description: 'Max logo size is 8MB.',
+          });
+          continue;
+        }
+        const dataUrl = await fileToDataUrl(file);
+        const intrinsic = await measureImage(dataUrl);
+        const area = currentPrintArea;
+        const placementWidth = area.width * stageSize.width;
+        const aspect = intrinsic.width / intrinsic.height || 1;
+        const placementHeight = placementWidth / aspect;
+        const placement: MockupPlacement = {
+          id: `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          imageDataUrl: dataUrl,
+          x: area.x * stageSize.width + (area.width * stageSize.width - placementWidth) / 2,
+          y: area.y * stageSize.height + (area.height * stageSize.height - placementHeight) / 2,
+          width: placementWidth,
+          height: placementHeight,
+          rotation: 0,
+          opacity: 1,
+        };
+        upsertPlacement(placement);
+        setSelectedId(placement.id);
+
+        // Save the original file to Storage when signed in so OrderBuilder
+        // Step 4 can auto-attach it. Unsigned users still get the canvas
+        // preview — we nudge them once after the loop.
+        if (isAuthenticated && user) {
+          const ext = file.name.split('.').pop() || 'png';
+          const safeName = file.name
+            .replace(/\.[^.]+$/, '')
+            .replace(/[^a-zA-Z0-9-_]+/g, '-')
+            .slice(0, 60);
+          const path = `${user.id}/mockup-logos/${Date.now()}-${safeName}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from('user-uploads')
+            .upload(path, file, {
+              cacheControl: '3600',
+              upsert: false,
+            });
+          if (uploadError) {
+            toast.error(`Couldn't save ${file.name}`, { description: uploadError.message });
+            continue;
+          }
+          const { data } = supabase.storage.from('user-uploads').getPublicUrl(path);
+          setUploadedLogoUrls((prev) =>
+            prev.includes(data.publicUrl) ? prev : [...prev, data.publicUrl],
+          );
+        } else {
+          placedAnyForUnauthed = true;
+        }
       }
-      const dataUrl = await fileToDataUrl(file);
-      const intrinsic = await measureImage(dataUrl);
-      const area = printAreas[activeAngle] ?? DEFAULT_PRINT_AREA;
-      const placementWidth = area.width * stageSize.width;
-      const aspect = intrinsic.width / intrinsic.height || 1;
-      const placementHeight = placementWidth / aspect;
-      const placement: MockupPlacement = {
-        id: `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-        imageDataUrl: dataUrl,
-        x: area.x * stageSize.width + (area.width * stageSize.width - placementWidth) / 2,
-        y: area.y * stageSize.height + (area.height * stageSize.height - placementHeight) / 2,
-        width: placementWidth,
-        height: placementHeight,
-        rotation: 0,
-        opacity: 1,
-      };
-      upsertPlacement(placement);
-      setSelectedId(placement.id);
+      if (placedAnyForUnauthed) {
+        toast.message('Sign in to save the source file', {
+          description: "We'll keep your original artwork on your account so production has it.",
+          action: { label: 'Sign in', onClick: () => openAuthModal() },
+        });
+      }
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -256,31 +351,47 @@ function Studio({
       const target = e.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
       const step = e.shiftKey ? 10 : 1;
+      const isArea = selectedId === PRINT_AREA_ID;
+      const nudgeArea = (dx: number, dy: number) =>
+        setPrintAreaForActiveAngle({
+          x: currentPrintArea.x + dx / stageSize.width,
+          y: currentPrintArea.y + dy / stageSize.height,
+          width: currentPrintArea.width,
+          height: currentPrintArea.height,
+        });
       let handled = true;
       switch (e.key) {
         case 'ArrowLeft':
-          updatePlacements((cur) =>
-            cur.map((p) => (p.id === selectedId ? { ...p, x: p.x - step } : p)),
-          );
+          if (isArea) nudgeArea(-step, 0);
+          else
+            updatePlacements((cur) =>
+              cur.map((p) => (p.id === selectedId ? { ...p, x: p.x - step } : p)),
+            );
           break;
         case 'ArrowRight':
-          updatePlacements((cur) =>
-            cur.map((p) => (p.id === selectedId ? { ...p, x: p.x + step } : p)),
-          );
+          if (isArea) nudgeArea(step, 0);
+          else
+            updatePlacements((cur) =>
+              cur.map((p) => (p.id === selectedId ? { ...p, x: p.x + step } : p)),
+            );
           break;
         case 'ArrowUp':
-          updatePlacements((cur) =>
-            cur.map((p) => (p.id === selectedId ? { ...p, y: p.y - step } : p)),
-          );
+          if (isArea) nudgeArea(0, -step);
+          else
+            updatePlacements((cur) =>
+              cur.map((p) => (p.id === selectedId ? { ...p, y: p.y - step } : p)),
+            );
           break;
         case 'ArrowDown':
-          updatePlacements((cur) =>
-            cur.map((p) => (p.id === selectedId ? { ...p, y: p.y + step } : p)),
-          );
+          if (isArea) nudgeArea(0, step);
+          else
+            updatePlacements((cur) =>
+              cur.map((p) => (p.id === selectedId ? { ...p, y: p.y + step } : p)),
+            );
           break;
         case 'Delete':
         case 'Backspace':
-          removePlacement(selectedId);
+          if (!isArea) removePlacement(selectedId);
           break;
         default:
           handled = false;
@@ -290,49 +401,64 @@ function Studio({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selectedId, currentPrintArea, stageSize]);
 
-  // ─── Save / export ───
+  // ─── Add to project (stays on page) ───
 
-  const handleSave = async () => {
+  const handleAddToProject = async () => {
     if (!stageRef.current) return;
-    // Deselect so the transform handles don't bleed into the export.
-    setSelectedId(null);
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    const dataUrl = stageRef.current.toDataURL({
-      pixelRatio: 2,
-      mimeType: 'image/png',
-    });
-
-    // Attach to a new cart line as a quick "this is what I want" mockup.
-    addToCart({
-      productId: product.id,
-      productName: product.name,
-      sku: product.sku,
-      category: product.category,
-      color: activeColor,
-      size: product.sizes[0] ?? '—',
-      quantity: 12,
-      basePrice: product.base_price,
-      image: product.images?.[0] ?? null,
-      mockupUrl: dataUrl,
-    });
-
-    // Stash on session so OrderBuilder can pick it up if user navigates back.
-    try {
-      sessionStorage.setItem('lsl_last_mockup_url', dataUrl);
-    } catch {
-      /* ignore quota */
+    if (!isAuthenticated) {
+      // Logos can be saved without auth in theory, but the cart UX expects
+      // the user to be on their way to checkout, so nudge sign-in early.
+      toast.message('Sign in to send this to production', {
+        description: 'Your project lives on your account so we can quote and confirm.',
+        action: { label: 'Sign in', onClick: () => openAuthModal() },
+      });
+    }
+    if (!selectedSize) {
+      toast.error('Pick a size first');
+      return;
+    }
+    if (quantity < 1) {
+      toast.error('Quantity must be at least 1');
+      return;
     }
 
-    toast.success('Mockup saved', {
-      description: 'Added to your project with the active color and quantity 12. Adjust in the cart.',
-      action: { label: 'View cart', onClick: openDrawer },
-    });
+    setIsAddingToCart(true);
+    try {
+      // Deselect so the transform handles don't bleed into the export.
+      setSelectedId(null);
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      const mockupUrl = stageRef.current.toDataURL({
+        pixelRatio: 2,
+        mimeType: 'image/png',
+      });
 
-    if (onNavigateToBuildOrder) {
-      // small delay so the user sees the toast
-      setTimeout(onNavigateToBuildOrder, 500);
+      addToCart({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        category: product.category,
+        color: activeColor,
+        size: selectedSize,
+        quantity,
+        basePrice: product.base_price,
+        image: resolvedImageUrl ?? product.images?.[0] ?? null,
+        mockupUrl,
+        sourceLogoUrls: uploadedLogoUrls,
+        printArea: { angle: activeAngle, ...currentPrintArea },
+      });
+
+      toast.success('Added to project', {
+        description: `${quantity}× ${product.name} · ${activeColor} · ${selectedSize}`,
+        action: { label: 'View cart', onClick: openDrawer },
+      });
+
+      // Reset qty so the next variant starts from a clean state. Keep the
+      // canvas + uploaded logos so the customer can stack more variants.
+      setQuantity(12);
+    } finally {
+      setIsAddingToCart(false);
     }
   };
 
@@ -353,7 +479,7 @@ function Studio({
   // ─── Render ───
 
   const selected = placements.find((p) => p.id === selectedId) ?? null;
-  const printArea = printAreas[activeAngle] ?? DEFAULT_PRINT_AREA;
+  const printArea = currentPrintArea;
   const tintHex = colorToHex(activeColor);
   const lightActiveColor = isLightColor(activeColor);
 
@@ -369,16 +495,12 @@ function Studio({
               {product.name}
             </h1>
             <p className="mt-1 text-sm text-lsl-graphite">
-              Drag a logo onto the print area. Resize and rotate with the handles. Save when you&apos;re happy.
+              Drop a logo into the print area. Drag the dashed rectangle to move where it&apos;ll land on the garment.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="md" onClick={handleDownload}>
               <Download className="h-4 w-4" strokeWidth={1.75} /> Download PNG
-            </Button>
-            <Button variant="primary" size="md" onClick={handleSave}>
-              <ShoppingBag className="h-4 w-4" strokeWidth={1.75} /> Save &amp; add
-              to project
             </Button>
           </div>
         </div>
@@ -414,11 +536,6 @@ function Studio({
                   applyTint={!isExactColorImage}
                   stageSize={stageSize}
                 />
-                <PrintAreaGuide
-                  printArea={printArea}
-                  stageSize={stageSize}
-                  light={lightActiveColor}
-                />
               </Layer>
               <Layer>
                 <Group
@@ -440,6 +557,14 @@ function Studio({
                     />
                   ))}
                 </Group>
+                <EditablePrintArea
+                  printArea={printArea}
+                  stageSize={stageSize}
+                  light={lightActiveColor}
+                  isSelected={selectedId === PRINT_AREA_ID}
+                  onSelect={() => setSelectedId(PRINT_AREA_ID)}
+                  onChange={setPrintAreaForActiveAngle}
+                />
               </Layer>
             </Stage>
 
@@ -507,6 +632,31 @@ function Studio({
               </p>
             </PanelSection>
 
+            <PanelSection title="Print area">
+              <div className="space-y-2">
+                <p className="text-[11px] leading-relaxed text-lsl-graphite">
+                  Click the dashed rectangle on the canvas to move or resize where your logo lands.
+                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                    {isPrintAreaCustomized ? 'Custom' : 'Default'}
+                  </span>
+                  {isPrintAreaCustomized && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetPrintArea();
+                        if (selectedId === PRINT_AREA_ID) setSelectedId(null);
+                      }}
+                      className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite underline-offset-2 hover:text-lsl-ink hover:underline"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            </PanelSection>
+
             <PanelSection title="Logo">
               <div className="space-y-2">
                 <input
@@ -521,9 +671,15 @@ function Studio({
                   variant="primary"
                   size="md"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingLogo}
                   className="w-full"
                 >
-                  <Upload className="h-4 w-4" strokeWidth={1.75} /> Upload logo
+                  {isUploadingLogo ? (
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                  ) : (
+                    <Upload className="h-4 w-4" strokeWidth={1.75} />
+                  )}
+                  {isUploadingLogo ? 'Uploading…' : 'Upload logo'}
                 </Button>
                 <p className="text-[11px] leading-relaxed text-lsl-graphite">
                   PNG, JPG, or SVG · up to 8 MB. Drag straight onto the canvas.
@@ -618,6 +774,88 @@ function Studio({
               </PanelSection>
             )}
 
+            <PanelSection title="Add to project">
+              <div className="space-y-3">
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <div className="space-y-1">
+                    <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                      Size
+                    </label>
+                    <select
+                      value={selectedSize}
+                      onChange={(e) => setSelectedSize(e.target.value)}
+                      className="h-10 w-full rounded-lg border border-lsl-stone bg-white px-3 text-sm text-lsl-ink focus:outline-none focus:ring-2 focus:ring-lsl-navy/30"
+                    >
+                      {product.sizes.length === 0 ? (
+                        <option value="">No sizes</option>
+                      ) : (
+                        product.sizes.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                      Qty
+                    </label>
+                    <div className="flex h-10 items-center rounded-lg border border-lsl-stone bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                        aria-label="Decrease quantity"
+                        className="grid h-full w-9 place-items-center text-lsl-graphite hover:text-lsl-ink"
+                      >
+                        <Minus className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        value={quantity}
+                        onChange={(e) =>
+                          setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))
+                        }
+                        className="h-full w-14 border-0 bg-transparent text-center font-mono text-sm tabular-nums text-lsl-ink focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => q + 1)}
+                        aria-label="Increase quantity"
+                        className="grid h-full w-9 place-items-center text-lsl-graphite hover:text-lsl-ink"
+                      >
+                        <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-lsl-cream/60 px-3 py-2 text-[11px] text-lsl-graphite">
+                  <span className="text-lsl-ink font-medium">{activeColor}</span>
+                  {' · '}
+                  <span className="tabular-nums">${product.base_price.toFixed(2)}</span>
+                  {' / unit'}
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleAddToProject}
+                  disabled={isAddingToCart || product.sizes.length === 0}
+                  className="w-full"
+                >
+                  {isAddingToCart ? (
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                  ) : (
+                    <ShoppingBag className="h-4 w-4" strokeWidth={1.75} />
+                  )}
+                  {isAddingToCart ? 'Adding…' : 'Add to project'}
+                </Button>
+                <p className="text-[11px] leading-relaxed text-lsl-graphite">
+                  Stays on this page so you can add another color or size. Logos are saved to your account.
+                </p>
+              </div>
+            </PanelSection>
+
             <PanelSection title="Tips">
               <ul className="space-y-1 text-[11px] leading-relaxed text-lsl-graphite">
                 <li>↑↓←→ to nudge · Shift = 10px steps</li>
@@ -697,27 +935,113 @@ function ProductLayer({
   );
 }
 
-function PrintAreaGuide({
+function EditablePrintArea({
   printArea,
   stageSize,
   light,
+  isSelected,
+  onSelect,
+  onChange,
 }: {
   printArea: { x: number; y: number; width: number; height: number };
   stageSize: { width: number; height: number };
   light: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
+  onChange: (next: { x: number; y: number; width: number; height: number }) => void;
 }) {
+  const rectRef = useRef<Konva.Rect>(null);
+  const transformerRef = useRef<Konva.Transformer>(null);
+
+  useEffect(() => {
+    if (isSelected && transformerRef.current && rectRef.current) {
+      transformerRef.current.nodes([rectRef.current]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+  }, [isSelected]);
+
+  const px = printArea.x * stageSize.width;
+  const py = printArea.y * stageSize.height;
+  const pw = printArea.width * stageSize.width;
+  const ph = printArea.height * stageSize.height;
+
+  const baseStroke = light ? 'rgba(11,11,14,0.45)' : 'rgba(247,244,238,0.65)';
+  const selectedStroke = '#003380';
+
   return (
-    <Rect
-      x={printArea.x * stageSize.width}
-      y={printArea.y * stageSize.height}
-      width={printArea.width * stageSize.width}
-      height={printArea.height * stageSize.height}
-      stroke={light ? 'rgba(11,11,14,0.35)' : 'rgba(247,244,238,0.5)'}
-      strokeWidth={1}
-      dash={[6, 4]}
-      listening={false}
-      perfectDrawEnabled={false}
-    />
+    <>
+      <Rect
+        ref={rectRef}
+        x={px}
+        y={py}
+        width={pw}
+        height={ph}
+        stroke={isSelected ? selectedStroke : baseStroke}
+        strokeWidth={isSelected ? 1.5 : 1}
+        dash={isSelected ? [4, 3] : [6, 4]}
+        fillEnabled={false}
+        // Make the stroke clickable so logos inside the rect still take clicks,
+        // but the dashed border itself selects the print area for editing.
+        hitStrokeWidth={14}
+        draggable
+        onMouseDown={onSelect}
+        onTap={onSelect}
+        onDragEnd={(e) => {
+          const node = e.target;
+          onChange({
+            x: node.x() / stageSize.width,
+            y: node.y() / stageSize.height,
+            width: printArea.width,
+            height: printArea.height,
+          });
+        }}
+        onTransformEnd={() => {
+          const node = rectRef.current;
+          if (!node) return;
+          const sx = node.scaleX();
+          const sy = node.scaleY();
+          node.scaleX(1);
+          node.scaleY(1);
+          onChange({
+            x: node.x() / stageSize.width,
+            y: node.y() / stageSize.height,
+            width: (node.width() * sx) / stageSize.width,
+            height: (node.height() * sy) / stageSize.height,
+          });
+        }}
+        perfectDrawEnabled={false}
+      />
+      {isSelected && (
+        <Transformer
+          ref={transformerRef}
+          rotateEnabled={false}
+          enabledAnchors={[
+            'top-left',
+            'top-right',
+            'bottom-left',
+            'bottom-right',
+            'middle-left',
+            'middle-right',
+            'top-center',
+            'bottom-center',
+          ]}
+          anchorStroke="#003380"
+          anchorFill="#F7F4EE"
+          anchorSize={9}
+          borderStroke="#003380"
+          borderDash={[4, 4]}
+          boundBoxFunc={(_oldBox, newBox) => {
+            const minPx = MIN_PRINT_AREA_FRAC * stageSize.width;
+            if (newBox.width < minPx || newBox.height < minPx) return _oldBox;
+            // Keep inside the stage.
+            if (newBox.x < 0 || newBox.y < 0) return _oldBox;
+            if (newBox.x + newBox.width > stageSize.width) return _oldBox;
+            if (newBox.y + newBox.height > stageSize.height) return _oldBox;
+            return newBox;
+          }}
+        />
+      )}
+    </>
   );
 }
 

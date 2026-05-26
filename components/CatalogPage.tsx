@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Layers,
   Minus,
   Plus,
@@ -500,7 +501,12 @@ function ProductCard({
       </div>
 
       <div className="flex flex-1 flex-col p-5">
-        <div className="flex items-start justify-between gap-3">
+        {product.brand && (
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+            {product.brand}
+          </p>
+        )}
+        <div className="mt-1 flex items-start justify-between gap-3">
           <h3 className="font-display text-base font-semibold leading-tight text-lsl-ink">
             {product.name}
           </h3>
@@ -508,9 +514,13 @@ function ProductCard({
             ${product.base_price.toFixed(2)}
           </span>
         </div>
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
-          SKU {product.sku}
-        </p>
+        {(product.style_number || product.item_number || product.sku) && (
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+            {product.style_number
+              ? `Style ${product.style_number}`
+              : `Item ${product.item_number || product.sku}`}
+          </p>
+        )}
         <p className="mt-3 text-xs text-lsl-graphite">
           <span className="tabular-nums">{product.colors.length}</span> color
           {product.colors.length === 1 ? '' : 's'} ·{' '}
@@ -555,8 +565,28 @@ function ProductModal({
     };
   }, [onClose]);
 
-  const allImages = product.images ?? [];
+  // Per-color gallery — when the admin has uploaded a gallery for this color,
+  // show those images and reset the carousel index on color change. Falls back
+  // to the legacy flat `images[]` array for products without per-color galleries.
+  const allImages = useMemo(() => {
+    const perColor = product.images_by_color?.[selectedColor];
+    if (perColor && perColor.length > 0) return perColor;
+    return product.images ?? [];
+  }, [product.images, product.images_by_color, selectedColor]);
+
+  useEffect(() => {
+    setCurrentImageIdx(0);
+  }, [selectedColor]);
+
   const primaryImage = allImages[0] ?? null;
+
+  const addonRuleLines = useMemo(() => {
+    if (!product.addon_rules) return [] as string[];
+    return product.addon_rules
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }, [product.addon_rules]);
 
   const handleAddToCart = () => {
     addToCart({
@@ -670,18 +700,36 @@ function ProductModal({
         </div>
 
         <div className="flex flex-1 flex-col overflow-y-auto p-7 md:w-1/2 md:p-9">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-lsl-stone bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
               {product.category}
             </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
-              SKU {product.sku}
-            </span>
+            {product.style_number && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                Style {product.style_number}
+              </span>
+            )}
+            {product.item_number && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                Item {product.item_number}
+              </span>
+            )}
+            {!product.style_number && !product.item_number && product.sku && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                SKU {product.sku}
+              </span>
+            )}
           </div>
+
+          {product.brand && (
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+              {product.brand}
+            </p>
+          )}
 
           <h2
             id="catalog-modal-title"
-            className="mt-3 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-[2rem]"
+            className="mt-1 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-[2rem]"
           >
             {product.name}
           </h2>
@@ -695,6 +743,37 @@ function ProductModal({
             <p className="mt-5 text-sm leading-relaxed text-lsl-graphite">
               {product.description}
             </p>
+          )}
+
+          {product.source_url && (
+            <a
+              href={product.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex w-fit items-center gap-1.5 text-xs font-medium text-lsl-navy underline-offset-2 hover:underline"
+            >
+              View this product on the supplier&apos;s site
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+
+          {addonRuleLines.length > 0 && (
+            <div className="mt-5 rounded-xl border border-lsl-stone bg-white/60 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+                Add-ons &amp; upcharges
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {addonRuleLines.map((line, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2 text-sm leading-relaxed text-lsl-ink"
+                  >
+                    <span className="text-lsl-thread">•</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <div className="mt-6 space-y-5">

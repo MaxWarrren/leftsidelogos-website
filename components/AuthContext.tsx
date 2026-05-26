@@ -15,6 +15,16 @@ interface UserOrganization {
   access_code: string | null;
 }
 
+// Options recognized by openAuthModal. All fields are optional; legacy callers
+// can keep invoking openAuthModal() with no args and get the default sign-in
+// modal.
+export interface OpenAuthModalOptions {
+  mode?: 'signin' | 'signup';
+  message?: string;          // contextual headline rendered above the form
+  required?: boolean;        // disables backdrop/ESC dismissal
+  onClose?: () => void;      // invoked when the user dismisses or completes
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -25,9 +35,10 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string, orgName: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
-  openAuthModal: () => void;
+  openAuthModal: (opts?: OpenAuthModalOptions) => void;
   closeAuthModal: () => void;
   isAuthModalOpen: boolean;
+  authModalOptions: OpenAuthModalOptions;
   isRecoveringPassword: boolean;
   setIsRecoveringPassword: (val: boolean) => void;
 }
@@ -47,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [organization, setOrganization] = useState<UserOrganization | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalOptions, setAuthModalOptions] = useState<OpenAuthModalOptions>({});
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
   // Fetch profile and org for a given user
@@ -214,9 +226,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
-        openAuthModal: () => setIsAuthModalOpen(true),
-        closeAuthModal: () => setIsAuthModalOpen(false),
+        openAuthModal: (opts?: OpenAuthModalOptions) => {
+          setAuthModalOptions(opts ?? {});
+          setIsAuthModalOpen(true);
+        },
+        closeAuthModal: () => {
+          // Fire the consumer's onClose hook before tearing down state so
+          // callers can navigate or follow-up cleanly.
+          authModalOptions.onClose?.();
+          setIsAuthModalOpen(false);
+          setAuthModalOptions({});
+        },
         isAuthModalOpen,
+        authModalOptions,
         isRecoveringPassword,
         setIsRecoveringPassword,
       }}

@@ -24,6 +24,7 @@ export const AuthModal: React.FC = () => {
   const {
     isAuthModalOpen,
     closeAuthModal,
+    authModalOptions,
     signIn,
     signUp,
     isRecoveringPassword,
@@ -68,11 +69,22 @@ export const AuthModal: React.FC = () => {
     closeAuthModal();
   };
 
-  // Lock body scroll, trap ESC, autofocus first field.
+  // Preselect the requested tab + apply required-mode lock whenever the modal
+  // re-opens. We watch isAuthModalOpen so reopening with different options
+  // takes effect.
+  useEffect(() => {
+    if (!isAuthModalOpen) return;
+    if (authModalOptions.mode === 'signup') setTab('signup');
+    else if (authModalOptions.mode === 'signin') setTab('login');
+  }, [isAuthModalOpen, authModalOptions.mode]);
+
+  const required = !!authModalOptions.required;
+
+  // Lock body scroll, trap ESC (unless required), autofocus first field.
   useEffect(() => {
     if (!isAuthModalOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
+      if (e.key === 'Escape' && !required) handleClose();
       if (e.key === 'Tab' && modalRef.current) {
         trapFocus(e, modalRef.current);
       }
@@ -87,7 +99,7 @@ export const AuthModal: React.FC = () => {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthModalOpen, tab, isRecoveringPassword]);
+  }, [isAuthModalOpen, tab, isRecoveringPassword, required]);
 
   // ─── Submit handlers ───
 
@@ -178,7 +190,7 @@ export const AuthModal: React.FC = () => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          onClick={handleClose}
+          onClick={required ? undefined : handleClose}
           className="absolute inset-0 bg-lsl-ink/55 backdrop-blur-sm"
           aria-hidden="true"
         />
@@ -192,14 +204,16 @@ export const AuthModal: React.FC = () => {
           onClick={(e) => e.stopPropagation()}
           className="relative w-full max-w-md overflow-hidden rounded-3xl border border-lsl-stone bg-lsl-cream shadow-lsl-lift"
         >
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label="Close"
-            className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/85 text-lsl-graphite shadow-lsl-card backdrop-blur-sm transition-colors hover:bg-white hover:text-lsl-ink"
-          >
-            <X className="h-4 w-4" strokeWidth={2} />
-          </button>
+          {!required && (
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close"
+              className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/85 text-lsl-graphite shadow-lsl-card backdrop-blur-sm transition-colors hover:bg-white hover:text-lsl-ink"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          )}
 
           <div className="px-8 pt-8">
             <div className="flex items-center gap-3">
@@ -221,6 +235,12 @@ export const AuthModal: React.FC = () => {
                       : 'Create your workspace'}
               </span>
             </div>
+
+            {authModalOptions.message && !isRecoveringPassword && (
+              <p className="mt-3 text-sm leading-relaxed text-lsl-graphite">
+                {authModalOptions.message}
+              </p>
+            )}
 
             {!isRecoveringPassword && tab !== 'forgot_password' && (
               <div className="mt-6 inline-flex rounded-full border border-lsl-stone bg-white p-1">

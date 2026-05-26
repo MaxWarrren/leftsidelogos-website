@@ -35,9 +35,19 @@ export interface CatalogProduct {
   slug: string;
   category: string;
   category_id: string;
-  sku: string;
+  sku: string | null;
+  brand?: string | null;
+  item_number?: string | null;
+  style_number?: string | null;
+  source_url?: string | null; // external product page (e.g. ssactivewear.com listing)
   description?: string;
-  images: string[]; // Supabase Storage paths or local paths
+  images: string[]; // Supabase Storage paths or local paths (legacy flat array)
+  // Per-color ordered galleries. Shape: { [colorName]: string[] }.
+  // First entry per color is the catalog hero. New CMS writes this; falls
+  // back to `images` for legacy rows.
+  images_by_color?: Record<string, string[]>;
+  // Plain multiline text rendered as a bullet list on the item page.
+  addon_rules?: string | null;
   colors: string[];
   sizes: string[];
   base_price: number;
@@ -93,7 +103,19 @@ export interface CartItem {
   quantity: number;
   basePrice: number;
   image: string | null; // Supabase Storage URL or local path
-  mockupUrl?: string | null; // AI-generated mockup image (base64 data URL)
+  mockupUrl?: string | null; // composed mockup snapshot (data URL or Storage URL)
+  // Public URLs of raw logo files uploaded inside MockupStudio. OrderBuilder
+  // Step 4 auto-attaches these so the customer doesn't have to re-upload.
+  sourceLogoUrls?: string[];
+  // Customer-defined print area (normalized 0-1, plus the angle it was set on).
+  // Production uses this to know where on the garment the logo should land.
+  printArea?: {
+    angle: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface GroupedCartItem {
@@ -104,6 +126,8 @@ export interface GroupedCartItem {
   basePrice: number;
   image: string | null;
   mockupUrl?: string | null;
+  // Union of raw logo URLs across all line items of this product (from MockupStudio).
+  sourceLogoUrls?: string[];
   variants: { id: string; color: string; size: string; quantity: number }[];
   totalQuantity: number;
   subtotal: number;
