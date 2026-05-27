@@ -352,7 +352,7 @@ function TabButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] transition-colors',
+        'rounded-full px-4 py-1.5 text-sm font-semibold transition-colors',
         active
           ? 'bg-lsl-ink text-lsl-cream'
           : 'text-lsl-graphite hover:text-lsl-ink',
@@ -386,7 +386,7 @@ function FieldWrap({
   return (
     <label className="block">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+        <span className="font-sans text-xs font-medium text-lsl-graphite">
           {label}
         </span>
         {hint && (

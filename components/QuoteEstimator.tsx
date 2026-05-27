@@ -128,7 +128,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                   </div>
                   <div>
                     <h2 className="text-2xl font-display font-bold text-lsl-black">The LSL Quality Standard</h2>
-                    <p className="text-sm text-gray-400 font-light uppercase tracking-widest">Our Commitment to Your Vision</p>
+                    <p className="text-sm text-gray-400">Our Commitment to Your Vision</p>
                   </div>
                 </div>
 
@@ -191,10 +191,10 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
               >
                 <div className="md:col-span-4 space-y-6">
                   <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-6">Add Product</h3>
+                    <h3 className="text-sm font-bold text-gray-500 mb-6">Add Product</h3>
                     <div className="space-y-5">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Product Type</label>
+                        <label className="text-xs font-medium text-gray-500 ml-1">Product Type</label>
                         <select
                           value={newItem.type}
                           onChange={(e) => setNewItem({ ...newItem, type: e.target.value })}
@@ -205,7 +205,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Size</label>
+                          <label className="text-xs font-medium text-gray-500 ml-1">Size</label>
                           <select
                             value={newItem.size}
                             onChange={(e) => setNewItem({ ...newItem, size: e.target.value })}
@@ -215,7 +215,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                           </select>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Color</label>
+                          <label className="text-xs font-medium text-gray-500 ml-1">Color</label>
                           <select
                             value={newItem.color}
                             onChange={(e) => setNewItem({ ...newItem, color: e.target.value })}
@@ -226,7 +226,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Quantity</label>
+                        <label className="text-xs font-medium text-gray-500 ml-1">Quantity</label>
                         <input
                           type="number"
                           min="1"
@@ -245,7 +245,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                   </div>
 
                   <div className="bg-lsl-black p-8 rounded-[2.5rem] shadow-xl text-white">
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-4">LSL Direct Support</h3>
+                    <h3 className="text-sm font-bold text-gray-300 mb-4">LSL Direct Support</h3>
                     <p className="text-sm font-light text-gray-400 mb-6 leading-relaxed">Need custom help with your artwork or a specific project?</p>
                     <a href="#contact" className="flex items-center justify-center gap-2 w-full py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-bold text-xs transition-all border border-white/10">
                       <Calendar size={14} /> SCHEDULE CALENDAR LINK
@@ -256,7 +256,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                 <div className="md:col-span-8 bg-white p-10 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col min-h-[600px]">
                   <h3 className="text-xl font-display font-bold mb-8 flex justify-between items-center text-lsl-black">
                     <span>Order Summary</span>
-                    <span className="text-xs font-sans font-bold uppercase tracking-widest text-gray-300">{items.length} Products</span>
+                    <span className="text-sm font-sans font-medium text-gray-400">{items.length} Products</span>
                   </h3>
 
                   <div className="flex-grow overflow-auto">
@@ -268,7 +268,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                       </div>
                     ) : (
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-[#fcfcfd] text-gray-400 text-[10px] uppercase tracking-widest font-bold">
+                        <thead className="bg-[#fcfcfd] text-gray-500 text-xs font-semibold">
                           <tr>
                             <th className="p-4 rounded-l-2xl">Item</th>
                             <th className="p-4">Spec</th>
@@ -281,7 +281,7 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                           {items.map((item) => (
                             <tr key={item.id} className="group hover:bg-[#fcfcfd] transition-colors">
                               <td className="p-4 font-bold text-lsl-black">{item.type}</td>
-                              <td className="p-4 text-xs text-gray-400 font-medium uppercase tracking-wider">{item.color} / {item.size}</td>
+                              <td className="p-4 text-sm text-gray-500 font-medium">{item.color} / {item.size}</td>
                               <td className="p-4 text-center font-medium text-lsl-black">{item.quantity}</td>
                               <td className="p-4 text-right font-bold text-lsl-black">${(item.unitPrice * item.quantity).toFixed(2)}</td>
                               <td className="p-4 text-right">
@@ -314,12 +314,12 @@ export const QuoteEstimator: React.FC<QuoteEstimatorProps> = ({ onSwitchToMockup
                   </div>
 
                   <div className="mt-10 pt-8 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-4 text-yellow-600 bg-yellow-50 px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-wider border border-yellow-100 max-w-sm">
+                    <div className="flex items-center gap-4 text-yellow-700 bg-yellow-50 px-6 py-3 rounded-2xl text-xs font-medium border border-yellow-100 max-w-sm">
                       <AlertCircle size={16} className="shrink-0" />
                       <span>Estimate excludes sales tax. Final pricing may vary based on design complexity.</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Estimated Total</p>
+                      <p className="text-sm text-gray-500 font-medium mb-1">Estimated Total</p>
                       <p className="text-6xl font-display font-bold text-lsl-blue leading-none">${calculateTotal().toFixed(2)}</p>
                     </div>
                   </div>

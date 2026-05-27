@@ -149,7 +149,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onStartDesigning }) => {
             className="inline-flex items-center justify-center lg:justify-start gap-3"
           >
             <span className="h-[2px] w-8 bg-lsl-blue hidden lg:block"></span>
-            <span className="text-lsl-blue font-bold text-sm md:text-base tracking-[0.2em] uppercase">
+            <span className="text-lsl-blue font-semibold text-sm md:text-base">
               Premium Custom Branding
             </span>
           </motion.div>

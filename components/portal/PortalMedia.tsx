@@ -228,25 +228,25 @@ export const PortalMedia: React.FC = () => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b border-gray-100 bg-gray-50/50">
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Title</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                        <th className="p-4 text-sm font-semibold text-gray-500">Type</th>
+                                        <th className="p-4 text-sm font-semibold text-gray-500">Title</th>
+                                        <th className="p-4 text-sm font-semibold text-gray-500">Date</th>
+                                        <th className="p-4 text-sm font-semibold text-gray-500">Status</th>
+                                        <th className="p-4 text-sm font-semibold text-gray-500 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {fileItems.map((file) => (
                                         <tr key={file.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                             <td className="p-4">
-                                                <span className="bg-gray-100 text-gray-600 font-bold text-[10px] uppercase px-3 py-1 rounded-full">
+                                                <span className="bg-gray-100 text-gray-700 font-semibold text-xs capitalize px-3 py-1 rounded-full">
                                                     {file.type}
                                                 </span>
                                             </td>
                                             <td className="p-4 font-semibold text-lsl-black">{file.title}</td>
                                             <td className="p-4 text-sm text-gray-500">{new Date(file.created_at).toLocaleDateString()}</td>
                                             <td className="p-4">
-                                                <span className={`font-bold uppercase text-[10px] px-3 py-1 rounded-full border ${
+                                                <span className={`font-semibold capitalize text-xs px-3 py-1 rounded-full border ${
                                                     (file.status === 'signed' || file.status === 'paid') ? 'border-green-200 bg-green-50 text-green-700' :
                                                     file.status === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-700' :
                                                     'border-red-200 bg-red-50 text-red-700'
@@ -294,7 +294,7 @@ export const PortalMedia: React.FC = () => {
                                             ) : (
                                                 <div className="flex flex-col items-center gap-2">
                                                     <FileIcon className="h-10 w-10 text-gray-300" />
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{item.file_type.split('/')[1] || 'FILE'}</span>
+                                                    <span className="text-xs font-medium text-gray-500">{item.file_type.split('/')[1] || 'File'}</span>
                                                 </div>
                                             )}
                                             <div className="absolute inset-0 bg-lsl-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3">

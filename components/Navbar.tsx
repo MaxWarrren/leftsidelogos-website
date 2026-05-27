@@ -174,7 +174,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   type="button"
                   onClick={() => openAuthModal()}
                   className={cn(
-                    'ml-2 h-9 rounded-full px-4 text-xs font-semibold uppercase tracking-wider transition-all',
+                    'ml-2 h-9 rounded-full px-4 text-sm font-semibold transition-all',
                     overHero
                       ? 'border border-lsl-cream/40 text-lsl-cream hover:bg-lsl-cream hover:text-lsl-ink'
                       : 'border border-lsl-ink/15 text-lsl-ink hover:border-lsl-ink hover:bg-lsl-ink hover:text-lsl-cream',
@@ -244,7 +244,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     {item.name}
                     {currentPage === item.page && (
-                      <span className="text-xs font-sans uppercase tracking-widest text-lsl-thread">
+                      <span className="text-xs font-sans font-semibold text-lsl-thread">
                         Now
                       </span>
                     )}
@@ -260,7 +260,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     setMobileMenuOpen(false);
                     signOut();
                   }}
-                  className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-lsl-cream/70 hover:text-lsl-cream"
+                  className="flex items-center gap-2 text-sm font-semibold text-lsl-cream/70 hover:text-lsl-cream"
                 >
                   <LogOut className="h-4 w-4" /> Sign out
                 </button>
@@ -271,7 +271,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     setMobileMenuOpen(false);
                     openAuthModal();
                   }}
-                  className="w-full rounded-full border border-lsl-cream/40 py-4 text-sm font-semibold uppercase tracking-widest text-lsl-cream hover:bg-lsl-cream hover:text-lsl-ink"
+                  className="w-full rounded-full border border-lsl-cream/40 py-4 text-base font-semibold text-lsl-cream hover:bg-lsl-cream hover:text-lsl-ink"
                 >
                   Log in / Sign up
                 </button>

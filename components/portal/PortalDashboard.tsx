@@ -107,7 +107,7 @@ export const PortalDashboard: React.FC<{ onNavigate: (tab: 'overview' | 'orders'
                                         <span className="font-semibold text-lsl-black text-sm">
                                             {order.name}
                                         </span>
-                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
                                             order.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-lsl-blue/10 text-lsl-blue'
                                             }`}>
                                             {order.status}

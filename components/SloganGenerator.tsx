@@ -70,7 +70,7 @@ export const SloganGenerator: React.FC = () => {
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
              <Sparkles className="text-lsl-blue w-6 h-6" />
-             <span className="text-lsl-blue font-bold tracking-wider uppercase text-sm">AI Design Studio</span>
+             <span className="text-lsl-blue font-semibold text-sm">AI Design Studio</span>
           </div>
           <h2 className="text-4xl md:text-5xl font-display font-bold text-lsl-black mb-4">
             Need Inspiration?
@@ -122,7 +122,7 @@ export const SloganGenerator: React.FC = () => {
                         className="group relative bg-white border border-gray-200 p-8 rounded-2xl shadow-sm hover:shadow-xl hover:border-lsl-blue transition-all duration-300 flex flex-col items-center text-center justify-center min-h-[200px]"
                       >
                          <h3 className="font-display text-2xl font-bold text-gray-800 mb-2 leading-tight">"{idea}"</h3>
-                         <p className="text-xs text-gray-400 uppercase tracking-widest mt-2">Concept {idx + 1}</p>
+                         <p className="text-sm text-gray-500 font-medium mt-2">Concept {idx + 1}</p>
                          
                          <button 
                             onClick={() => copyToClipboard(idea, idx)}

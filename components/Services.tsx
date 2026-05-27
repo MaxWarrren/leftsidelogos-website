@@ -151,7 +151,7 @@ function ServiceCard({ service, anchor = false }: { service: Service; anchor?: b
             <Icon className="h-5 w-5" strokeWidth={1.5} />
           </div>
           {service.tag && (
-            <span className="rounded-full border border-lsl-thread/40 bg-lsl-thread/10 px-2.5 py-1 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-thread">
+            <span className="rounded-full border border-lsl-thread/40 bg-lsl-thread/10 px-2.5 py-1 font-sans text-xs font-medium text-lsl-thread">
               {service.tag}
             </span>
           )}
@@ -162,7 +162,7 @@ function ServiceCard({ service, anchor = false }: { service: Service; anchor?: b
         <p className="mt-2 text-sm leading-relaxed text-lsl-cream/75">
           {service.desc}
         </p>
-        <p className="mt-4 font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-thread">
+        <p className="mt-4 font-sans text-xs font-medium text-lsl-thread">
           Our signature craft →
         </p>
       </motion.article>
@@ -200,7 +200,7 @@ function SectionHeader({
 }) {
   return (
     <div className="max-w-3xl">
-      <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+      <p className="font-sans text-sm font-semibold text-lsl-navy">
         {eyebrow}
       </p>
       <h2 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl lg:text-[3.5rem]">
@@ -248,7 +248,7 @@ function MobileStep({ step }: { step: Step }) {
         <div className="grid h-12 w-12 place-items-center rounded-full bg-lsl-navy text-lsl-cream">
           <Icon className="h-5 w-5" strokeWidth={1.5} />
         </div>
-        <span className="mt-2 font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite tabular-nums">
+        <span className="mt-2 font-sans text-xs font-medium text-lsl-graphite tabular-nums">
           Step 0{step.id}
         </span>
       </div>
@@ -305,7 +305,7 @@ function DesktopTimeline({ steps }: { steps: Step[] }) {
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
                 <span className="sr-only">{step.title}</span>
               </button>
-              <p className="mt-4 font-sans text-[10px] uppercase tracking-[0.2em] tabular-nums text-lsl-graphite">
+              <p className="mt-4 font-sans text-xs font-medium tabular-nums text-lsl-graphite">
                 Step 0{step.id}
               </p>
               <h4

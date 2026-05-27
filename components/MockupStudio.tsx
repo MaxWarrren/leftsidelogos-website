@@ -24,10 +24,12 @@ import {
   Copy,
   Crop,
   Download,
+  Info,
   Loader2,
   Maximize2,
   Minus,
   Plus,
+  RotateCcw,
   ShoppingBag,
   Trash2,
   Upload,
@@ -96,15 +98,21 @@ function Studio({
   void onNavigateToBuildOrder; // Add-to-project now stays on this page.
 
   // Available angles, derived from `image_variants` with stable Front→Side→Back ordering.
+  // Filter out "on model" variants — only flat product shots are editable; you
+  // can't drop a logo onto a posed model photo and have it look right.
   const angles = useMemo(() => {
     const fromVariants = product.image_variants
       ? Object.keys(product.image_variants)
       : [];
-    if (!fromVariants.length) return product.images?.length ? ['front'] : [];
-    const ordered: string[] = VIEW_ORDER.filter((v) => fromVariants.includes(v));
-    return ordered.concat(
-      fromVariants.filter((v) => !VIEW_ORDER.includes(v as any)),
-    );
+    const flat = fromVariants.filter((v) => !/model/i.test(v));
+    if (!flat.length) return product.images?.length ? ['front'] : [];
+    const ordered: string[] = [];
+    for (const target of VIEW_ORDER) {
+      const found = flat.find((v) => v.toLowerCase() === target);
+      if (found) ordered.push(found);
+    }
+    for (const v of flat) if (!ordered.includes(v)) ordered.push(v);
+    return ordered;
   }, [product]);
 
   const printAreas: ProductPrintAreas = useMemo(() => {
@@ -131,6 +139,11 @@ function Studio({
   // Public URLs of raw logo files the customer has uploaded during this session.
   const [uploadedLogoUrls, setUploadedLogoUrls] = useState<string[]>([]);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
+  // Track which (product, color) pairs we've already snapshotted to the Portal
+  // Mockups folder in this session, so adding multiple sizes of the same shirt
+  // doesn't spam duplicate files.
+  const savedMockupKeys = useRef<Set<string>>(new Set());
 
   // Placements live globally across views — they sit at the same canvas coords
   // regardless of which angle the user is looking at.
@@ -449,6 +462,47 @@ function Studio({
         mimeType: 'image/png',
       });
 
+      // Save one mockup per (product, color) to the Portal Mockups folder.
+      // Multiple sizes of the same shirt share the same artwork, so we dedupe
+      // by productId+color within this session.
+      const mockupKey = `${product.id}::${activeColor}`;
+      if (
+        isAuthenticated &&
+        user &&
+        organization &&
+        !savedMockupKeys.current.has(mockupKey)
+      ) {
+        const blob = dataUrlToBlob(mockupUrl);
+        const colorSlug = slugify(activeColor);
+        const productSlug = product.slug || slugify(product.name);
+        const path = `${organization.id}/Mockups/${productSlug}-${colorSlug}-${Date.now()}.png`;
+        const { error: uploadError } = await supabase.storage
+          .from('organization-assets')
+          .upload(path, blob, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: 'image/png',
+          });
+        if (uploadError) {
+          console.warn('Mockup upload failed', uploadError);
+        } else {
+          const { error: mediaError } = await supabase.from('media_items').insert({
+            organization_id: organization.id,
+            uploader_id: user.id,
+            file_path: path,
+            file_name: `${product.name} – ${activeColor}.png`,
+            file_type: 'image/png',
+            size: blob.size,
+            category: 'Mockups',
+          });
+          if (mediaError) {
+            console.warn('media_items insert failed', mediaError);
+          } else {
+            savedMockupKeys.current.add(mockupKey);
+          }
+        }
+      }
+
       addToCart({
         productId: product.id,
         productName: product.name,
@@ -468,8 +522,6 @@ function Studio({
         description: `${quantity}× ${product.name} · ${activeColor} · ${selectedSize}`,
         action: { label: 'View cart', onClick: openDrawer },
       });
-
-      setQuantity(12);
     } finally {
       setIsAddingToCart(false);
     }
@@ -501,7 +553,7 @@ function Studio({
       <div className="mx-auto max-w-7xl px-6 md:px-10">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="font-sans text-sm font-semibold text-lsl-navy">
               Mockup Studio
             </p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-4xl">
@@ -543,8 +595,6 @@ function Studio({
             resetPrintArea();
             if (selectedId === PRINT_AREA_ID) setSelectedId(null);
           }}
-          onUploadClick={() => fileInputRef.current?.click()}
-          isUploadingLogo={isUploadingLogo}
         />
 
         <input
@@ -556,7 +606,7 @@ function Studio({
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
 
-        <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_280px]">
+        <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_320px]">
           {/* Canvas */}
           <div
             ref={stageWrapRef}
@@ -640,20 +690,35 @@ function Studio({
             )}
 
             {isEditingPrintArea && (
-              <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-lsl-ink/90 px-3 py-1 font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-cream shadow-lsl-card">
+              <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-lsl-ink/90 px-3 py-1 font-sans text-xs font-medium text-lsl-cream shadow-lsl-card">
                 Editing print area
               </div>
             )}
           </div>
 
-          {/* Right rail — narrower, focused on layers / inspector / add-to-project */}
-          <aside className="space-y-5">
-            <PanelSection title="Layers">
-              {placements.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-lsl-stone bg-white px-3 py-4 text-center text-xs text-lsl-graphite">
-                  No logos yet. Drop one anywhere on the canvas.
-                </p>
-              ) : (
+          {/* Right rail — Logos (upload + layers), Inspector, Add to project */}
+          <aside className="space-y-4">
+            <PanelSection title="Logos">
+              <div className="space-y-3">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingLogo}
+                  className="w-full"
+                >
+                  {isUploadingLogo ? (
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                  ) : (
+                    <Upload className="h-4 w-4" strokeWidth={1.75} />
+                  )}
+                  {isUploadingLogo ? 'Uploading…' : 'Upload logo'}
+                </Button>
+                {placements.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-lsl-stone bg-lsl-cream/40 px-3 py-3 text-center text-xs text-lsl-graphite">
+                    PNG, JPG or SVG · up to 8MB. Drag onto the canvas too.
+                  </p>
+                ) : (
                 <ul className="space-y-1.5">
                   {placements
                     .slice()
@@ -686,7 +751,7 @@ function Studio({
                                   className="h-full w-full object-contain"
                                 />
                               </span>
-                              <span className="min-w-0 flex-1 truncate font-sans text-[11px] uppercase tracking-[0.16em] text-lsl-graphite">
+                              <span className="min-w-0 flex-1 truncate font-sans text-sm text-lsl-graphite">
                                 Logo {stackIndex}
                               </span>
                             </button>
@@ -725,7 +790,8 @@ function Studio({
                       );
                     })}
                 </ul>
-              )}
+                )}
+              </div>
             </PanelSection>
 
             {selected && !isEditingPrintArea && (
@@ -742,7 +808,7 @@ function Studio({
               <div className="space-y-3">
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                   <div className="space-y-1">
-                    <label className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                    <label className="font-sans text-xs font-medium text-lsl-graphite">
                       Size
                     </label>
                     <select
@@ -762,7 +828,7 @@ function Studio({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                    <label className="font-sans text-xs font-medium text-lsl-graphite">
                       Qty
                     </label>
                     <div className="flex h-10 items-center rounded-lg border border-lsl-stone bg-white">
@@ -794,11 +860,12 @@ function Studio({
                     </div>
                   </div>
                 </div>
-                <div className="rounded-lg bg-lsl-cream/60 px-3 py-2 text-[11px] text-lsl-graphite">
+                <div className="flex items-center justify-between rounded-lg bg-lsl-cream/60 px-3 py-2 text-xs text-lsl-graphite">
                   <span className="text-lsl-ink font-medium">{activeColor}</span>
-                  {' · '}
-                  <span className="tabular-nums">${product.base_price.toFixed(2)}</span>
-                  {' / unit'}
+                  <span className="tabular-nums">
+                    ${product.base_price.toFixed(2)}
+                    <span className="text-lsl-graphite"> / unit</span>
+                  </span>
                 </div>
                 <Button
                   variant="primary"
@@ -814,22 +881,23 @@ function Studio({
                   )}
                   {isAddingToCart ? 'Adding…' : 'Add to project'}
                 </Button>
-                <p className="text-[11px] leading-relaxed text-lsl-graphite">
-                  Stays on this page so you can add another color or size. Logos are saved to your brand assets.
-                </p>
+                <div className="flex items-start gap-2 rounded-lg border border-lsl-thread/30 bg-lsl-thread/8 px-3 py-2.5">
+                  <Info
+                    className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-lsl-thread"
+                    strokeWidth={2}
+                  />
+                  <p className="text-xs leading-relaxed text-lsl-graphite">
+                    <span className="font-medium text-lsl-ink">Designs and pricing aren&apos;t final.</span>{' '}
+                    This is a quick mockup so you and our design team can see what you&apos;re going for — we&apos;ll refine the artwork and confirm the price with you before anything is paid.
+                  </p>
+                </div>
               </div>
             </PanelSection>
 
-            <PanelSection title="Tips">
-              <ul className="space-y-1 text-[11px] leading-relaxed text-lsl-graphite">
-                <li>↑↓←→ to nudge · Shift = 10px steps</li>
-                <li>Backspace deletes the selected layer</li>
-                <li>
-                  <Crop className="-mt-0.5 mr-1 inline h-3 w-3" strokeWidth={2} />
-                  Logo is clipped to the print area
-                </li>
-              </ul>
-            </PanelSection>
+            <p className="px-1 text-xs leading-relaxed text-lsl-graphite/80">
+              <Crop className="-mt-0.5 mr-1 inline h-3 w-3" strokeWidth={2} />
+              Logo is clipped to the print area. Use ↑↓←→ to nudge (Shift = 10px), Backspace to delete.
+            </p>
           </aside>
         </div>
       </div>
@@ -850,8 +918,6 @@ function StudioToolbar({
   isPrintAreaCustomized,
   onTogglePrintAreaEdit,
   onResetPrintArea,
-  onUploadClick,
-  isUploadingLogo,
 }: {
   angles: string[];
   activeAngle: string;
@@ -863,8 +929,6 @@ function StudioToolbar({
   isPrintAreaCustomized: boolean;
   onTogglePrintAreaEdit: () => void;
   onResetPrintArea: () => void;
-  onUploadClick: () => void;
-  isUploadingLogo: boolean;
 }) {
   const visibleColors = colors.slice(0, VISIBLE_SWATCH_LIMIT);
   const overflowColors = colors.slice(VISIBLE_SWATCH_LIMIT);
@@ -883,10 +947,10 @@ function StudioToolbar({
 
   return (
     <div className="mt-6 rounded-2xl border border-lsl-stone bg-white p-3 shadow-lsl-card">
-      <div className="flex flex-nowrap items-center gap-3 overflow-x-auto md:flex-wrap md:overflow-visible">
-        {/* View pills */}
-        <ToolbarGroup label="View">
-          <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        {/* View — segmented pill control */}
+        {angles.length > 1 && (
+          <div className="flex items-center gap-1 rounded-full bg-lsl-cream/70 p-1">
             {angles.map((a) => (
               <button
                 key={a}
@@ -894,22 +958,20 @@ function StudioToolbar({
                 onClick={() => onAngleChange(a)}
                 aria-pressed={a === activeAngle}
                 className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                  'rounded-full px-3.5 py-1.5 text-xs font-medium capitalize transition-all',
                   a === activeAngle
-                    ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
-                    : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+                    ? 'bg-lsl-ink text-lsl-cream shadow-sm'
+                    : 'text-lsl-graphite hover:text-lsl-ink',
                 )}
               >
                 {a}
               </button>
             ))}
           </div>
-        </ToolbarGroup>
+        )}
 
-        <ToolbarDivider />
-
-        {/* Color swatches */}
-        <ToolbarGroup label="Color">
+        {/* Color */}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex items-center gap-1.5">
             {visibleColors.map((c) => {
               const hex = colorToHex(c);
@@ -922,10 +984,10 @@ function StudioToolbar({
                   aria-pressed={active}
                   title={c}
                   className={cn(
-                    'relative h-7 w-7 flex-shrink-0 overflow-hidden rounded-full border-2 transition-transform',
+                    'relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-full border-2 transition-all',
                     active
-                      ? 'scale-110 border-lsl-ink shadow-lsl-lift'
-                      : 'border-lsl-stone hover:border-lsl-ink',
+                      ? 'border-lsl-ink shadow-lsl-lift'
+                      : 'border-lsl-stone hover:border-lsl-ink/60',
                   )}
                   style={{ background: hex }}
                 >
@@ -938,9 +1000,10 @@ function StudioToolbar({
                 <button
                   type="button"
                   onClick={() => setColorsOpen((v) => !v)}
-                  className="flex h-7 items-center gap-1 rounded-full border border-lsl-stone bg-white px-2.5 text-[10px] font-sans uppercase tracking-[0.18em] text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
+                  className="flex h-8 items-center gap-1 rounded-full border border-lsl-stone bg-white px-3 font-sans text-xs font-medium text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
                 >
-                  More <ChevronDown className="h-3 w-3" strokeWidth={2} />
+                  +{overflowColors.length}
+                  <ChevronDown className="h-3 w-3" strokeWidth={2} />
                 </button>
                 {colorsOpen && (
                   <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-xl border border-lsl-stone bg-white p-3 shadow-lsl-lift">
@@ -981,7 +1044,7 @@ function StudioToolbar({
                         );
                       })}
                     </div>
-                    <p className="mt-2 truncate font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+                    <p className="mt-2 truncate font-sans text-xs text-lsl-graphite">
                       Active · <span className="text-lsl-ink">{activeColor}</span>
                     </p>
                   </div>
@@ -989,13 +1052,14 @@ function StudioToolbar({
               </div>
             )}
           </div>
-        </ToolbarGroup>
+          <span className="hidden truncate text-sm text-lsl-graphite md:inline">
+            {activeColor}
+          </span>
+        </div>
 
-        <ToolbarDivider />
-
-        {/* Print area */}
-        <ToolbarGroup label="Print area">
-          <div className="flex items-center gap-1">
+        {/* Print area — compact segmented + icon reset */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 rounded-full bg-lsl-cream/70 p-1">
             <button
               type="button"
               onClick={() => {
@@ -1003,13 +1067,13 @@ function StudioToolbar({
               }}
               aria-pressed={!isEditingPrintArea}
               className={cn(
-                'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                'rounded-full px-3 py-1.5 text-xs font-medium transition-all',
                 !isEditingPrintArea
-                  ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
-                  : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+                  ? 'bg-lsl-ink text-lsl-cream shadow-sm'
+                  : 'text-lsl-graphite hover:text-lsl-ink',
               )}
             >
-              Default
+              Print area
             </button>
             <button
               type="button"
@@ -1018,72 +1082,30 @@ function StudioToolbar({
               }}
               aria-pressed={isEditingPrintArea}
               className={cn(
-                'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
+                'rounded-full px-3 py-1.5 text-xs font-medium transition-all',
                 isEditingPrintArea
-                  ? 'border-lsl-ink bg-lsl-ink text-lsl-cream'
-                  : 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink',
+                  ? 'bg-lsl-ink text-lsl-cream shadow-sm'
+                  : 'text-lsl-graphite hover:text-lsl-ink',
               )}
             >
               Resize
             </button>
+          </div>
+          {isPrintAreaCustomized && (
             <button
               type="button"
               onClick={onResetPrintArea}
-              disabled={!isPrintAreaCustomized}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-all',
-                isPrintAreaCustomized
-                  ? 'border-lsl-stone bg-white text-lsl-graphite hover:border-lsl-ink hover:text-lsl-ink'
-                  : 'cursor-not-allowed border-lsl-stone/60 bg-white/60 text-lsl-graphite/40',
-              )}
+              aria-label="Reset print area to default"
+              title="Reset print area to default"
+              className="grid h-8 w-8 place-items-center rounded-full border border-lsl-stone bg-white text-lsl-graphite transition-colors hover:border-lsl-ink hover:text-lsl-ink"
             >
-              Reset
+              <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.75} />
             </button>
-          </div>
-        </ToolbarGroup>
-
-        <ToolbarDivider />
-
-        {/* Upload */}
-        <ToolbarGroup label="Logo">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onUploadClick}
-            disabled={isUploadingLogo}
-          >
-            {isUploadingLogo ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />
-            ) : (
-              <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />
-            )}
-            {isUploadingLogo ? 'Uploading…' : 'Upload logo'}
-          </Button>
-        </ToolbarGroup>
+          )}
+        </div>
       </div>
     </div>
   );
-}
-
-function ToolbarGroup({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-shrink-0 items-center gap-2">
-      <span className="hidden font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite md:inline">
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
-
-function ToolbarDivider() {
-  return <div className="hidden h-6 w-px flex-shrink-0 bg-lsl-stone md:block" />;
 }
 
 // ─── Stage children ───
@@ -1330,7 +1352,7 @@ function PanelSection({
 }) {
   return (
     <section className="rounded-2xl border border-lsl-stone bg-white p-4 shadow-lsl-card">
-      <h3 className="mb-3 font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+      <h3 className="mb-3 font-sans text-xs font-semibold text-lsl-graphite">
         {title}
       </h3>
       {children}
@@ -1406,7 +1428,7 @@ function NumberRow({
   return (
     <label className="block">
       <span className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+        <span className="font-sans text-xs font-medium text-lsl-graphite">
           {label}
         </span>
         <span className="font-sans text-[11px] tabular-nums text-lsl-ink">
@@ -1460,7 +1482,7 @@ function NoProductSelected({
   return (
     <div className="min-h-screen bg-lsl-cream pt-28 pb-20">
       <div className="mx-auto max-w-2xl px-6 text-center">
-        <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+        <p className="font-sans text-sm font-semibold text-lsl-navy">
           Mockup Studio
         </p>
         <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-lsl-ink">
@@ -1503,5 +1525,25 @@ function measureImage(src: string): Promise<{ width: number; height: number }> {
     img.onerror = () => resolve({ width: 600, height: 600 });
     img.src = src;
   });
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta, b64] = dataUrl.split(',');
+  const mimeMatch = meta.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'item';
 }
 

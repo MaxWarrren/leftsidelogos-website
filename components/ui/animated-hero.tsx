@@ -74,7 +74,7 @@ function Hero({ onStartDesigning }: HeroProps) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="inline-flex items-center gap-2 rounded-full border border-lsl-cream/20 bg-lsl-cream/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-lsl-cream/80 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 rounded-full border border-lsl-cream/20 bg-lsl-cream/10 px-3 py-1 text-xs font-medium text-lsl-cream/80 backdrop-blur-sm"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-lsl-thread" />
             Premium custom apparel · Made in Missouri
@@ -195,7 +195,7 @@ function HeroStat({ value, label }: { value: string; label: string }) {
       <dd className="font-display text-3xl font-semibold tracking-tight text-lsl-cream md:text-4xl">
         <span className="tabular-nums">{value}</span>
       </dd>
-      <p className="mt-1 font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-cream/55">
+      <p className="mt-1 font-sans text-sm text-lsl-cream/60">
         {label}
       </p>
     </div>
@@ -238,7 +238,7 @@ function TrustMarquee({
         }}
       >
         {reduced ? (
-          <ul className="flex flex-wrap justify-center gap-x-8 gap-y-2 px-6 font-sans text-[11px] uppercase tracking-[0.2em] text-lsl-cream/60">
+          <ul className="flex flex-wrap justify-center gap-x-8 gap-y-2 px-6 font-sans text-sm text-lsl-cream/70">
             {items.map((item) => (
               <li key={item}>{item}</li>
             ))}
@@ -252,7 +252,7 @@ function TrustMarquee({
               duration: 38,
               ease: 'linear',
             }}
-            className="flex w-max gap-12 px-6 font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-cream/55"
+            className="flex w-max gap-12 px-6 font-sans text-sm text-lsl-cream/60"
           >
             {doubled.map((item, idx) => (
               <li key={`${item}-${idx}`} className="flex items-center gap-12">

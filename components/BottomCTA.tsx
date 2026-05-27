@@ -28,7 +28,7 @@ export const BottomCTA: React.FC<BottomCTAProps> = ({ onStartDesigning }) => {
           className="grid items-end gap-12 md:grid-cols-12"
         >
           <div className="md:col-span-8">
-            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-thread">
+            <p className="font-sans text-sm font-semibold text-lsl-thread">
               Ready when you are
             </p>
             <h2 className="mt-4 font-display text-4xl font-semibold leading-[1.02] tracking-[-0.02em] md:text-6xl lg:text-[4.5rem]">

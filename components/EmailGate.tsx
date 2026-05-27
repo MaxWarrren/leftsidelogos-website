@@ -60,7 +60,7 @@ export const EmailGate: React.FC<EmailGateProps> = ({ onSubmit, onCancel }) => {
             </button>
           </form>
 
-          <p className="text-[10px] text-gray-400 mt-6 uppercase tracking-widest font-bold">
+          <p className="text-xs text-gray-400 mt-6 font-medium">
             Left Side Logos • Missouri, USA
           </p>
         </div>

@@ -53,7 +53,7 @@ export const ContactPage: React.FC = () => {
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           className="mx-auto max-w-3xl text-center"
         >
-          <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+          <p className="font-sans text-sm font-semibold text-lsl-navy">
             Get in touch
           </p>
           <h1 className="mt-3 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.015em] text-lsl-ink md:text-5xl">
@@ -78,11 +78,11 @@ export const ContactPage: React.FC = () => {
               <span className="grid h-7 w-7 place-items-center rounded-full bg-lsl-navy/10 text-lsl-navy">
                 <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} />
               </span>
-              <span className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+              <span className="font-sans text-xs font-medium text-lsl-graphite">
                 Book a call
               </span>
             </div>
-            <span className="hidden font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite md:inline">
+            <span className="hidden font-sans text-xs text-lsl-graphite md:inline">
               30 min · CT timezone
             </span>
           </div>
@@ -163,7 +163,7 @@ export const ContactPage: React.FC = () => {
             transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-3xl"
           >
-            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="font-sans text-sm font-semibold text-lsl-navy">
               Faqs
             </p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-lsl-ink md:text-4xl">
@@ -221,7 +221,7 @@ function ContactMethod({
         <Icon className="h-4 w-4" strokeWidth={1.5} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+        <p className="font-sans text-xs font-medium text-lsl-graphite">
           {label}
         </p>
         <p className="mt-0.5 truncate text-sm font-medium text-lsl-ink">

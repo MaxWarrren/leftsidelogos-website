@@ -112,13 +112,13 @@ export const PortalOrders: React.FC = () => {
                                 {/* Header */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-gray-50">
                                     <div className="space-y-1">
-                                        <p className="text-xs font-sans font-semibold text-gray-400 uppercase tracking-wider">
+                                        <p className="text-sm font-sans font-medium text-gray-500">
                                             ORD-{order.id.substring(0, 8)}
                                         </p>
                                         <h3 className="text-2xl font-bold text-lsl-black">{order.name}</h3>
                                         <p className="text-sm text-gray-500 font-medium">Total Quantity: {totalQty} units</p>
                                     </div>
-                                    <span className={`self-start sm:self-auto text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider ${
+                                    <span className={`self-start sm:self-auto text-xs font-semibold px-4 py-1.5 rounded-full capitalize ${
                                         order.status === 'completed' ? 'bg-green-100 text-green-700' :
                                         order.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
                                         'bg-lsl-blue/10 text-lsl-blue'
@@ -144,7 +144,7 @@ export const PortalOrders: React.FC = () => {
                                                     } ${isCurrent ? 'ring-4 ring-lsl-blue/20 ring-offset-2' : ''}`}>
                                                         <s.icon className="h-5 w-5" />
                                                     </div>
-                                                    <span className={`text-[10px] sm:text-xs uppercase font-bold tracking-wider ${
+                                                    <span className={`text-xs sm:text-sm font-medium ${
                                                         isActive ? 'text-lsl-black' : 'text-gray-300'
                                                     }`}>
                                                         {s.label}
@@ -157,7 +157,7 @@ export const PortalOrders: React.FC = () => {
 
                                 {/* Line Items */}
                                 <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
-                                    <h4 className="text-xs font-bold uppercase text-gray-400 tracking-wider mb-3 flex items-center gap-2">
+                                    <h4 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
                                         <ShoppingBag className="w-3.5 h-3.5" /> Line Items
                                     </h4>
                                     <div className="space-y-2">

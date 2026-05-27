@@ -34,7 +34,7 @@ export const OrderBuilderStepper: React.FC<OrderBuilderStepperProps> = ({
   return (
     <div className="sticky top-16 z-30 -mx-6 border-b border-lsl-stone bg-lsl-cream/90 px-6 py-3 backdrop-blur-md md:top-[72px] md:-mx-10 md:px-10">
       <div className="mx-auto flex max-w-3xl items-center gap-3 md:gap-5">
-        <p className="hidden font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite md:block">
+        <p className="hidden font-sans text-xs font-medium text-lsl-graphite md:block">
           Progress
         </p>
         <ol className="flex flex-1 items-center gap-2 md:gap-3" aria-label="Order builder progress">

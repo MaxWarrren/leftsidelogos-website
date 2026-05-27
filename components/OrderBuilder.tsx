@@ -653,7 +653,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
     return (
       <div className="min-h-screen bg-lsl-cream pt-24 pb-24">
         <div className="mx-auto max-w-xl px-6 text-center">
-          <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+          <p className="font-sans text-sm font-semibold text-lsl-navy">
             Order Builder
           </p>
           <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-lsl-ink">
@@ -667,7 +667,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
             <button
               type="button"
               onClick={onNavigateToCatalog}
-              className="mt-8 inline-flex items-center gap-1.5 font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-graphite hover:text-lsl-ink"
+              className="mt-8 inline-flex items-center gap-1.5 font-sans text-sm font-medium text-lsl-graphite hover:text-lsl-ink"
             >
               ← Back to catalog
             </button>
@@ -701,7 +701,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
       >
         <div className="mx-auto max-w-3xl px-6 md:px-10">
           <header className="mb-8 md:mb-10">
-            <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-navy">
+            <p className="font-sans text-sm font-semibold text-lsl-navy">
               Order Builder
             </p>
             <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-lsl-ink md:text-5xl">
@@ -911,7 +911,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                   ))}
                   <div className="flex items-center justify-between rounded-2xl border border-lsl-stone bg-white px-5 py-4">
                     <div className="text-sm">
-                      <span className="font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+                      <span className="font-sans text-sm font-medium text-lsl-graphite">
                         {cartCount} items
                       </span>
                       {onNavigateToCatalog && (
@@ -925,7 +925,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-sans text-[10px] uppercase tracking-[0.22em] text-lsl-graphite">
+                      <p className="font-sans text-xs font-medium text-lsl-graphite">
                         Est. total
                       </p>
                       <p className="font-display text-2xl font-semibold tabular-nums text-lsl-ink">
@@ -989,7 +989,7 @@ ${cartBreakdown.map((g) => `- ${g.totalQuantity}x ${g.product} (${g.category})`)
                       className="grid aspect-square place-items-center gap-2 rounded-xl border-2 border-dashed border-lsl-stone text-lsl-graphite transition-all hover:border-lsl-navy hover:bg-lsl-navy-50 hover:text-lsl-navy"
                     >
                       <Upload className="h-5 w-5" strokeWidth={1.75} />
-                      <span className="font-sans text-[10px] uppercase tracking-[0.18em]">
+                      <span className="font-sans text-xs font-medium">
                         Add logo
                       </span>
                     </button>
@@ -1080,7 +1080,7 @@ const Section = React.forwardRef<HTMLElement, SectionProps>(function Section(
       className="scroll-mt-40"
     >
       <header className="mb-5 flex items-baseline gap-3">
-        <span className="font-sans text-[11px] tabular-nums uppercase tracking-[0.22em] text-lsl-navy">
+        <span className="font-sans text-sm font-semibold tabular-nums text-lsl-navy">
           {number}
         </span>
         <h2
@@ -1125,7 +1125,7 @@ function Field({
   return (
     <label className={cn('block', className)}>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-lsl-graphite">
+        <span className="font-sans text-xs font-medium text-lsl-graphite">
           {label}
           {required && <span className="ml-1 text-red-500">*</span>}
         </span>
@@ -1310,7 +1310,7 @@ function CartColorCard({
           <h3 className="truncate font-display text-base font-semibold text-lsl-ink">
             {group.productName}
           </h3>
-          <p className="mt-0.5 font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+          <p className="mt-0.5 font-sans text-sm text-lsl-graphite">
             {group.color} · {group.rows.length} size
             {group.rows.length === 1 ? '' : 's'} · {group.sku}
           </p>
@@ -1334,7 +1334,7 @@ function CartColorCard({
 
       {expanded && (
         <div className="border-t border-lsl-stone bg-lsl-cream/40">
-          <div className="grid grid-cols-[1fr_140px_90px_44px] gap-3 px-5 py-2 font-sans text-[10px] uppercase tracking-[0.18em] text-lsl-graphite">
+          <div className="grid grid-cols-[1fr_140px_90px_44px] gap-3 px-5 py-2 font-sans text-xs font-medium text-lsl-graphite">
             <span>Size</span>
             <span className="text-center">Qty</span>
             <span className="text-right">Line</span>
@@ -1455,7 +1455,7 @@ function SuccessScreen({
           )}
         </p>
         {orderId && (
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-lsl-stone bg-white px-4 py-1.5 font-sans text-xs uppercase tracking-[0.2em] text-lsl-graphite">
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-lsl-stone bg-white px-4 py-1.5 font-sans text-xs font-medium text-lsl-graphite">
             Order ref{' '}
             <span className="font-semibold text-lsl-ink">{orderId.slice(0, 8)}</span>
           </p>

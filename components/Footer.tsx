@@ -69,7 +69,7 @@ export const Footer: React.FC = () => {
             variants={columnVariants}
             className="md:col-span-3"
           >
-            <h4 className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
+            <h4 className="font-sans text-sm font-semibold text-lsl-cream/70">
               Workshop
             </h4>
             <div className="mt-5 space-y-4 text-sm">
@@ -110,7 +110,7 @@ export const Footer: React.FC = () => {
             variants={columnVariants}
             className="md:col-span-4"
           >
-            <h4 className="font-sans text-[11px] uppercase tracking-[0.22em] text-lsl-cream/60">
+            <h4 className="font-sans text-sm font-semibold text-lsl-cream/70">
               Hours
             </h4>
             <ul className="mt-5 space-y-2 text-sm">
@@ -126,7 +126,7 @@ export const Footer: React.FC = () => {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="mt-20 flex flex-col items-center justify-between gap-4 border-t border-lsl-cream/10 pt-8 text-[11px] uppercase tracking-[0.22em] text-lsl-cream/50 md:flex-row"
+          className="mt-20 flex flex-col items-center justify-between gap-4 border-t border-lsl-cream/10 pt-8 text-sm text-lsl-cream/60 md:flex-row"
         >
           <p>
             © {new Date().getFullYear()} Left Side Logos · Missouri Born &amp; Raised

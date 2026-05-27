@@ -250,7 +250,7 @@ export const DesignStudio: React.FC = () => {
                     </div>
                 ) : (
                     <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-gray-500 text-sm uppercase">
+                        <thead className="bg-gray-50 text-gray-500 text-sm font-medium">
                             <tr>
                                 <th className="p-3 rounded-l-lg">Item</th>
                                 <th className="p-3">Details</th>

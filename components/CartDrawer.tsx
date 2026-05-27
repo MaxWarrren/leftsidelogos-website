@@ -95,7 +95,7 @@ function CartDrawer({ open, onOpenChange, onCheckout }: CartDrawerProps) {
                       <p className="truncate font-display text-base font-semibold text-lsl-ink">
                         {group.productName}
                       </p>
-                      <p className="font-sans text-[11px] uppercase tracking-[0.18em] text-lsl-graphite">
+                      <p className="font-sans text-xs text-lsl-graphite">
                         {group.sku}
                       </p>
                       <p className="mt-1 text-sm font-medium text-lsl-ink tabular-nums">

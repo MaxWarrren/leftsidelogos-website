@@ -101,7 +101,7 @@ export const PortalMessages: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Support Online</span>
+                    <span className="text-xs font-medium text-gray-500">Support Online</span>
                 </div>
             </div>
 
@@ -140,7 +140,7 @@ export const PortalMessages: React.FC = () => {
                                                 {msg.profiles?.full_name}
                                             </span>
                                             {isAdmin && (
-                                                <span className="bg-lsl-blue/10 text-lsl-blue text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Support</span>
+                                                <span className="bg-lsl-blue/10 text-lsl-blue text-[10px] font-semibold px-1.5 py-0.5 rounded">Support</span>
                                             )}
                                             <span className="text-[10px] text-gray-400 font-medium">
                                                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
