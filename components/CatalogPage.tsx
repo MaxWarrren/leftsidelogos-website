@@ -468,13 +468,13 @@ function ProductCard({
       className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-lsl-stone bg-white shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:border-lsl-ink/30 hover:shadow-lsl-lift"
       onClick={onOpen}
     >
-      <div className="relative aspect-square overflow-hidden bg-lsl-cream">
+      <div className="relative aspect-square overflow-hidden bg-white">
         {primaryImage ? (
           <img
             src={primaryImage}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-contain p-6 transition-transform duration-500 group-hover:scale-[1.03]"
+            className="h-full w-full object-contain p-4 transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="grid h-full w-full place-items-center text-lsl-stone">
@@ -549,7 +549,7 @@ function ProductModal({
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
   const [selectedColor, setSelectedColor] = useState(product.colors[0] ?? '');
   const [selectedSize, setSelectedSize] = useState(product.sizes[0] ?? '');
-  const [quantity, setQuantity] = useState(12);
+  const [quantity, setQuantity] = useState(1);
 
   // Trap ESC.
   useEffect(() => {

@@ -19,6 +19,7 @@ import useImage from 'use-image';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
+  Bookmark,
   Check,
   ChevronDown,
   Copy,
@@ -37,7 +38,7 @@ import {
 
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
-import { colorToHex, isLightColor, normalizeColorKey } from '../lib/colors';
+import { colorToHex, isLightColor } from '../lib/colors';
 import { useCart } from './CartContext';
 import { useCartDrawer } from './CartDrawer';
 import { useAuth } from './AuthContext';
@@ -133,8 +134,9 @@ function Studio({
   const [selectedSize, setSelectedSize] = useState<string>(
     product.sizes[0] ?? '',
   );
-  const [quantity, setQuantity] = useState<number>(12);
+  const [quantity, setQuantity] = useState<number>(1);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isSavingMockup, setIsSavingMockup] = useState(false);
 
   // Public URLs of raw logo files the customer has uploaded during this session.
   const [uploadedLogoUrls, setUploadedLogoUrls] = useState<string[]>([]);
@@ -203,8 +205,11 @@ function Studio({
   const stageRef = useRef<Konva.Stage>(null);
 
   // Resolve the active product image — no tinting fallback, just first-color fallback.
+  // image_variants keys are slugs ("red-white", "heather-grey-black"), so we must
+  // slugify the active color the same way to land a hit — normalizeColorKey keeps
+  // slashes/spaces and would always miss, falling back to the first variant.
   const resolvedImageUrl = useMemo(() => {
-    const colorKey = normalizeColorKey(activeColor);
+    const colorKey = slugify(activeColor);
     const variantsForAngle = product.image_variants?.[activeAngle];
     if (variantsForAngle) {
       if (variantsForAngle[colorKey]) return variantsForAngle[colorKey];
@@ -289,15 +294,16 @@ function Studio({
         }
         const dataUrl = await fileToDataUrl(file);
         const intrinsic = await measureImage(dataUrl);
-        const area = currentPrintArea;
-        const placementWidth = area.width * stageSize.width;
+        // Default to a reasonable size centered on the product image (not filling
+        // the print box). ~30% of stage width, with height from the logo's aspect.
         const aspect = intrinsic.width / intrinsic.height || 1;
+        const placementWidth = stageSize.width * 0.3;
         const placementHeight = placementWidth / aspect;
         const placement: MockupPlacement = {
           id: `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
           imageDataUrl: dataUrl,
-          x: area.x * stageSize.width + (area.width * stageSize.width - placementWidth) / 2,
-          y: area.y * stageSize.height + (area.height * stageSize.height - placementHeight) / 2,
+          x: (stageSize.width - placementWidth) / 2,
+          y: (stageSize.height - placementHeight) / 2,
           width: placementWidth,
           height: placementHeight,
           rotation: 0,
@@ -431,16 +437,75 @@ function Studio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, currentPrintArea, stageSize]);
 
-  // ─── Add to project (stays on page) ───
+  // ─── Export the current canvas to a PNG data URL ───
+  // Clears selection + print-area edit mode first so transform handles don't
+  // bleed into the exported image.
+  const exportMockupPng = async (): Promise<string | null> => {
+    if (!stageRef.current) return null;
+    setSelectedId(null);
+    setIsEditingPrintArea(false);
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    return stageRef.current.toDataURL({ pixelRatio: 2, mimeType: 'image/png' });
+  };
 
-  const handleAddToProject = async () => {
-    if (!stageRef.current) return;
-    if (!isAuthenticated) {
-      toast.message('Sign in to send this to production', {
-        description: 'Your project lives on your account so we can quote and confirm.',
+  // ─── Save mockup to the account (does NOT add to cart) ───
+  const handleSaveMockup = async () => {
+    if (!isAuthenticated || !user || !organization) {
+      toast.message('Sign in to save this mockup', {
+        description: 'Saved mockups live on your account so you can revisit them anytime.',
         action: { label: 'Sign in', onClick: () => openAuthModal() },
       });
+      return;
     }
+
+    setIsSavingMockup(true);
+    try {
+      const mockupUrl = await exportMockupPng();
+      if (!mockupUrl) return;
+
+      const blob = dataUrlToBlob(mockupUrl);
+      const colorSlug = slugify(activeColor);
+      const productSlug = product.slug || slugify(product.name);
+      const path = `${organization.id}/Mockups/${productSlug}-${colorSlug}-${Date.now()}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from('organization-assets')
+        .upload(path, blob, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: 'image/png',
+        });
+      if (uploadError) {
+        console.warn('Mockup upload failed', uploadError);
+        toast.error("Couldn't save mockup", { description: uploadError.message });
+        return;
+      }
+
+      const { error: mediaError } = await supabase.from('media_items').insert({
+        organization_id: organization.id,
+        uploader_id: user.id,
+        file_path: path,
+        file_name: `${product.name} – ${activeColor}.png`,
+        file_type: 'image/png',
+        size: blob.size,
+        category: 'Mockups',
+      });
+      if (mediaError) {
+        console.warn('media_items insert failed', mediaError);
+        toast.error("Couldn't save mockup", { description: mediaError.message });
+        return;
+      }
+
+      savedMockupKeys.current.add(`${product.id}::${activeColor}`);
+      toast.success('Mockup saved', {
+        description: 'Add it to your cart when ready.',
+      });
+    } finally {
+      setIsSavingMockup(false);
+    }
+  };
+
+  // ─── Add to cart (stays on page) ───
+  const handleAddToCart = async () => {
     if (!selectedSize) {
       toast.error('Pick a size first');
       return;
@@ -452,56 +517,7 @@ function Studio({
 
     setIsAddingToCart(true);
     try {
-      setSelectedId(null);
-      // Exit print-area edit mode so its transform handles don't render into
-      // the exported PNG either.
-      setIsEditingPrintArea(false);
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      const mockupUrl = stageRef.current.toDataURL({
-        pixelRatio: 2,
-        mimeType: 'image/png',
-      });
-
-      // Save one mockup per (product, color) to the Portal Mockups folder.
-      // Multiple sizes of the same shirt share the same artwork, so we dedupe
-      // by productId+color within this session.
-      const mockupKey = `${product.id}::${activeColor}`;
-      if (
-        isAuthenticated &&
-        user &&
-        organization &&
-        !savedMockupKeys.current.has(mockupKey)
-      ) {
-        const blob = dataUrlToBlob(mockupUrl);
-        const colorSlug = slugify(activeColor);
-        const productSlug = product.slug || slugify(product.name);
-        const path = `${organization.id}/Mockups/${productSlug}-${colorSlug}-${Date.now()}.png`;
-        const { error: uploadError } = await supabase.storage
-          .from('organization-assets')
-          .upload(path, blob, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: 'image/png',
-          });
-        if (uploadError) {
-          console.warn('Mockup upload failed', uploadError);
-        } else {
-          const { error: mediaError } = await supabase.from('media_items').insert({
-            organization_id: organization.id,
-            uploader_id: user.id,
-            file_path: path,
-            file_name: `${product.name} – ${activeColor}.png`,
-            file_type: 'image/png',
-            size: blob.size,
-            category: 'Mockups',
-          });
-          if (mediaError) {
-            console.warn('media_items insert failed', mediaError);
-          } else {
-            savedMockupKeys.current.add(mockupKey);
-          }
-        }
-      }
+      const mockupUrl = await exportMockupPng();
 
       addToCart({
         productId: product.id,
@@ -513,12 +529,12 @@ function Studio({
         quantity,
         basePrice: product.base_price,
         image: resolvedImageUrl ?? product.images?.[0] ?? null,
-        mockupUrl,
+        mockupUrl: mockupUrl ?? undefined,
         sourceLogoUrls: uploadedLogoUrls,
         printArea: { angle: activeAngle, ...currentPrintArea },
       });
 
-      toast.success('Added to project', {
+      toast.success('Added to cart', {
         description: `${quantity}× ${product.name} · ${activeColor} · ${selectedSize}`,
         action: { label: 'View cart', onClick: openDrawer },
       });
@@ -641,15 +657,14 @@ function Studio({
                 />
               </Layer>
 
-              {/* Placements — dimmed + non-draggable when editing the print area. */}
+              {/* Placements — dimmed + non-draggable when editing the print area.
+                  The workspace is the full product image: logos can be placed and
+                  dragged anywhere on the canvas, so we clip to the whole stage (the
+                  dashed print-area rect below stays as a guide, not a hard bound). */}
               <Layer opacity={isEditingPrintArea ? 0.6 : 1}>
                 <Group
                   clipFunc={(ctx) => {
-                    const px = printArea.x * stageSize.width;
-                    const py = printArea.y * stageSize.height;
-                    const pw = printArea.width * stageSize.width;
-                    const ph = printArea.height * stageSize.height;
-                    ctx.rect(px, py, pw, ph);
+                    ctx.rect(0, 0, stageSize.width, stageSize.height);
                   }}
                 >
                   {placements.map((p) => (
@@ -867,20 +882,36 @@ function Studio({
                     <span className="text-lsl-graphite"> / unit</span>
                   </span>
                 </div>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleAddToProject}
-                  disabled={isAddingToCart || product.sizes.length === 0}
-                  className="w-full"
-                >
-                  {isAddingToCart ? (
-                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
-                  ) : (
-                    <ShoppingBag className="h-4 w-4" strokeWidth={1.75} />
-                  )}
-                  {isAddingToCart ? 'Adding…' : 'Add to project'}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={handleSaveMockup}
+                    disabled={isSavingMockup || isAddingToCart}
+                    className="w-full"
+                  >
+                    {isSavingMockup ? (
+                      <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                    ) : (
+                      <Bookmark className="h-4 w-4" strokeWidth={1.75} />
+                    )}
+                    {isSavingMockup ? 'Saving…' : 'Save mockup'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleAddToCart}
+                    disabled={isAddingToCart || isSavingMockup || product.sizes.length === 0}
+                    className="w-full"
+                  >
+                    {isAddingToCart ? (
+                      <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                    ) : (
+                      <ShoppingBag className="h-4 w-4" strokeWidth={1.75} />
+                    )}
+                    {isAddingToCart ? 'Adding…' : 'Add to cart'}
+                  </Button>
+                </div>
                 <div className="flex items-start gap-2 rounded-lg border border-lsl-thread/30 bg-lsl-thread/8 px-3 py-2.5">
                   <Info
                     className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-lsl-thread"
@@ -896,7 +927,7 @@ function Studio({
 
             <p className="px-1 text-xs leading-relaxed text-lsl-graphite/80">
               <Crop className="-mt-0.5 mr-1 inline h-3 w-3" strokeWidth={2} />
-              Logo is clipped to the print area. Use ↑↓←→ to nudge (Shift = 10px), Backspace to delete.
+              Click a logo to select it, then drag to move. Use ↑↓←→ to nudge (Shift = 10px), Backspace to delete.
             </p>
           </aside>
         </div>
@@ -1293,7 +1324,16 @@ function PlacementImage({
         opacity={placement.opacity}
         draggable={draggable}
         onMouseDown={onSelect}
+        onClick={onSelect}
         onTap={onSelect}
+        onMouseEnter={(e) => {
+          const stage = e.target.getStage();
+          if (stage) stage.container().style.cursor = draggable ? 'move' : 'pointer';
+        }}
+        onMouseLeave={(e) => {
+          const stage = e.target.getStage();
+          if (stage) stage.container().style.cursor = 'default';
+        }}
         onDragEnd={(e) => {
           onChange({ ...placement, x: e.target.x(), y: e.target.y() });
         }}

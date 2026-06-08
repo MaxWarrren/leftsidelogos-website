@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -10,24 +10,35 @@ const globalForSupabase = globalThis as unknown as {
   __lslSupabase?: SupabaseClient;
 };
 
+// supabase-js attaches an auth header to EVERY request (even anon catalog
+// reads) by first resolving the auth token behind a lock. Its default lock
+// uses the Web Locks API (`navigator.locks`), which can stall on a cold load —
+// notably in Brave with storage partitioning — leaving the very first catalog
+// fetch AND the session restore hung until a manual refresh. `processLock` is
+// an in-memory promise-chain lock that avoids the Web Locks cold-start stall.
 export const supabase: SupabaseClient =
   globalForSupabase.__lslSupabase ??
-  (globalForSupabase.__lslSupabase = createClient(supabaseUrl, supabaseAnonKey));
+  (globalForSupabase.__lslSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'lsl-auth',
+      lock: processLock,
+    },
+  }));
 
-// Per-session circuit breaker for catalog reads. supabase-js retries each
-// request several times with OPTIONS + GET; if the project is unreachable
-// (DNS failure / paused project / wrong env), that's 6+ console errors per
-// route change. Once we've seen it fail once, fall straight back to the
-// local catalog for the rest of the session.
-let catalogFetchDisabled = false;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Fetch all published products with their category name
 // `image_variants`, `print_areas`, and `base_color` are optional new columns
 // (see migrations/20260523_catalog_customizer_fields.sql). The select pulls
 // them with safe fallbacks if the columns don't exist yet.
-export async function getAllProducts() {
-  if (catalogFetchDisabled) return [];
-
+//
+// A cold load (esp. Brave) can make the first request stall/fail; rather than
+// permanently disabling catalog reads for the session, we retry once after a
+// short delay so the catalog self-heals without a manual page refresh.
+export async function getAllProducts(retriesLeft = 1): Promise<any[]> {
   const { data, error } = await supabase
     .from('catalog_products')
     .select(`
@@ -74,7 +85,10 @@ export async function getAllProducts() {
       return (legacy || []).map(flattenCategory);
     }
     console.error('Failed to fetch products:', error);
-    catalogFetchDisabled = true;
+    if (retriesLeft > 0) {
+      await sleep(400);
+      return getAllProducts(retriesLeft - 1);
+    }
     return [];
   }
 
