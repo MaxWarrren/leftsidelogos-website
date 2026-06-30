@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The site is a single-page app with state-based navigation, so only the
+     homepage is a real, crawlable URL today. Add /catalog, /build-order, and
+     /contact here once real routes (or hash routes) exist. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://leftsidelogos.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

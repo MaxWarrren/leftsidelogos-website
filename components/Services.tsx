@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Box,
@@ -20,7 +20,6 @@ type Service = {
   icon: typeof Flame;
   title: string;
   desc: string;
-  tag?: string;
 };
 
 const services: Service[] = [
@@ -28,7 +27,6 @@ const services: Service[] = [
     icon: Scissors,
     title: 'Embroidery',
     desc: 'Premium thread on polos, hats, and outerwear. Digitized in-house so the stitch sits exactly where it should.',
-    tag: 'Signature service',
   },
   {
     icon: Flame,
@@ -103,9 +101,7 @@ export const Services: React.FC = () => {
       id="services"
       className="relative overflow-hidden bg-lsl-cream py-24 md:py-32"
     >
-      <PaperTexture />
-
-      <div className="relative mx-auto max-w-7xl px-6 md:px-10">
+      <div className="relative mx-auto max-w-[88rem] px-6 md:px-10">
         <SectionHeader
           eyebrow="What we do"
           title={
@@ -118,12 +114,20 @@ export const Services: React.FC = () => {
           intro="Six in-house production methods. One project manager. Zero ‘we’ll get back to you’."
         />
 
+        <div className="mt-6 flex items-baseline gap-3">
+          <span className="font-display text-3xl font-semibold tabular-nums text-lsl-ink">
+            100%
+          </span>
+          <span className="font-sans text-sm text-lsl-graphite md:text-base">
+            produced in-house in O&apos;Fallon, MO — no outsourcing, ever.
+          </span>
+        </div>
+
         <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((service, idx) => (
+          {services.map((service) => (
             <ServiceCard
               key={service.title}
               service={service}
-              anchor={idx === 0}
             />
           ))}
         </div>
@@ -134,40 +138,8 @@ export const Services: React.FC = () => {
   );
 };
 
-function ServiceCard({ service, anchor = false }: { service: Service; anchor?: boolean }) {
+function ServiceCard({ service }: { service: Service }) {
   const Icon = service.icon;
-  if (anchor) {
-    return (
-      <motion.article
-        initial={{ opacity: 0, y: 16 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-80px' }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="group relative isolate flex flex-col overflow-hidden rounded-2xl border border-lsl-ink bg-lsl-ink p-6 text-lsl-cream shadow-lsl-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lsl-lift"
-      >
-        <div className="pointer-events-none absolute -right-12 -top-10 -z-10 h-56 w-56 rounded-full bg-lsl-thread/25 blur-[100px]" />
-        <div className="flex items-start justify-between gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl border border-lsl-cream/15 bg-lsl-cream/5 text-lsl-thread">
-            <Icon className="h-5 w-5" strokeWidth={1.5} />
-          </div>
-          {service.tag && (
-            <span className="rounded-full border border-lsl-thread/40 bg-lsl-thread/10 px-2.5 py-1 font-sans text-xs font-medium text-lsl-thread">
-              {service.tag}
-            </span>
-          )}
-        </div>
-        <h3 className="mt-5 font-display text-xl font-semibold leading-tight text-lsl-cream">
-          {service.title}
-        </h3>
-        <p className="mt-2 text-sm leading-relaxed text-lsl-cream/75">
-          {service.desc}
-        </p>
-        <p className="mt-4 font-sans text-xs font-medium text-lsl-thread">
-          Our signature craft →
-        </p>
-      </motion.article>
-    );
-  }
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
@@ -350,16 +322,3 @@ function DesktopTimeline({ steps }: { steps: Step[] }) {
   );
 }
 
-function PaperTexture() {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 opacity-[0.04]"
-      style={{
-        backgroundImage:
-          'radial-gradient(#0B0B0E 1px, transparent 1px)',
-        backgroundSize: '22px 22px',
-      }}
-    />
-  );
-}

@@ -43,8 +43,6 @@
 
   .font-display {
     font-family: theme('fontFamily.display');
-    font-feature-settings: 'ss01', 'ss02';
-    font-optical-sizing: auto;
   }
 
   .tabular-nums {

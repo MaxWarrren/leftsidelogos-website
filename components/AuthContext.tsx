@@ -88,22 +88,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Initialize auth state
+  // Initialize auth state.
+  //
+  // supabase-js fires `onAuthStateChange` with an INITIAL_SESSION event on
+  // mount (with the restored session or null), so this listener alone covers
+  // cold-load session restore — no separate getSession() call needed.
+  //
+  // CRITICAL: the callback runs while GoTrueClient holds its internal auth
+  // lock. We must NOT `await` any Supabase call inside it — a nested request
+  // waits on that same lock and deadlocks, which hangs BOTH the profile fetch
+  // and any concurrent catalog read until a manual page refresh. So every
+  // Supabase follow-up (fetchUserData) is deferred out of the callback with
+  // setTimeout, letting the lock release first.
   useEffect(() => {
-    const initAuth = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (currentSession?.user) {
-        setSession(currentSession);
-        setUser(currentSession.user);
-        await fetchUserData(currentSession.user.id);
-      }
-      setIsLoading(false);
-    };
-
-    initAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
@@ -113,16 +111,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (newSession?.user) {
-        // Small delay to let the trigger create the profile
-        if (event === 'SIGNED_IN') {
-          setTimeout(() => fetchUserData(newSession.user.id), 500);
-        } else {
-          await fetchUserData(newSession.user.id);
-        }
+        const userId = newSession.user.id;
+        // SIGNED_IN may be a brand-new signup whose profile row is still being
+        // created by the DB trigger — give it a beat. Other events resolve
+        // immediately (but always off the callback stack to avoid the lock).
+        const delay = event === 'SIGNED_IN' ? 500 : 0;
+        setTimeout(() => fetchUserData(userId), delay);
       } else {
         setProfile(null);
         setOrganization(null);
       }
+
+      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();

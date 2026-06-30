@@ -63,8 +63,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+        sans: ['"Graphik Web Regular"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Graphik TT Medium"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
@@ -90,10 +90,20 @@ export default {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        'marquee': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        'blink': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0' },
+        },
       },
       animation: {
         'shimmer': 'shimmer 1.8s linear infinite',
         'fade-in': 'fade-in 200ms ease-out both',
+        'marquee': 'marquee 38s linear infinite',
+        'blink': 'blink 1s step-end infinite',
       },
     },
   },

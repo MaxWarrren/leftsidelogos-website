@@ -15,13 +15,9 @@ export const Footer: React.FC = () => {
   return (
     <footer
       id="contact"
-      className="relative isolate overflow-hidden bg-lsl-ink text-lsl-cream/80"
+      className="relative bg-lsl-ink text-lsl-cream/80"
     >
-      <StitchPattern />
-
-      <div className="absolute right-[-20%] bottom-[-20%] -z-10 h-[600px] w-[600px] rounded-full bg-lsl-navy/30 blur-[140px]" />
-
-      <div className="relative mx-auto max-w-7xl px-6 pt-24 pb-12 md:px-10 md:pt-32">
+      <div className="relative mx-auto max-w-[88rem] px-6 pt-24 pb-12 md:px-10 md:pt-32">
         <div className="grid gap-14 md:grid-cols-12 md:gap-10">
           <motion.div
             custom={0}
@@ -76,7 +72,7 @@ export const Footer: React.FC = () => {
               <a
                 href="https://maps.google.com/?q=29+West+Industrial+Dr,+O%27Fallon,+MO+63366"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="flex items-start gap-3 text-lsl-cream/80 transition-colors hover:text-lsl-cream"
               >
                 <MapPin
@@ -190,7 +186,7 @@ function SocialLink({
       href={href}
       aria-label={label}
       target={href.startsWith('http') ? '_blank' : undefined}
-      rel={href.startsWith('http') ? 'noreferrer' : undefined}
+      rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
       className="grid h-10 w-10 place-items-center rounded-full border border-lsl-cream/15 bg-white/[0.03] text-lsl-cream/80 transition-all hover:-translate-y-0.5 hover:border-lsl-thread/60 hover:bg-lsl-thread/10 hover:text-lsl-thread"
     >
       {children}
@@ -198,17 +194,3 @@ function SocialLink({
   );
 }
 
-// Diagonal stitch / weave SVG, very low opacity — adds tactile depth to the footer.
-function StitchPattern() {
-  return (
-    <div
-      aria-hidden="true"
-      className="absolute inset-0 -z-10 opacity-[0.05]"
-      style={{
-        backgroundImage:
-          'repeating-linear-gradient(45deg, #F7F4EE 0 1px, transparent 1px 14px), repeating-linear-gradient(-45deg, #F7F4EE 0 1px, transparent 1px 14px)',
-        backgroundSize: '28px 28px',
-      }}
-    />
-  );
-}

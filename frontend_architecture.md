@@ -115,7 +115,7 @@ User Action → Navbar.setCurrentPage(page)
 4. **Framer Motion** for animations and transitions (Hero, page transitions)
 5. **Brand tokens** defined in `index.html` theme config:
    - `lsl-black`, `lsl-grey`, `lsl-blue`, `lsl-light`
-   - Fonts: `font-sans` (Inter), `font-display` (Oswald)
+   - Fonts: `font-sans` (Graphik Web Regular), `font-display` (Graphik TT Medium)
 
 ---
 

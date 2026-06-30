@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Navbar } from './components/Navbar';
-import { Hero } from './components/ui/animated-hero';
+import { Hero } from './components/Hero';
+import { Reviews } from './components/Reviews';
+import { TrustedBy } from './components/TrustedBy';
+import { CatalogMarquee } from './components/CatalogMarquee';
 import { Services } from './components/Services';
-import { About } from './components/About';
+import { Faq } from './components/Faq';
 import { Footer } from './components/Footer';
 
 import { MockupStudio } from './components/MockupStudio';
@@ -17,13 +20,16 @@ import { CustomerPortal } from './components/portal/CustomerPortal';
 import { AuthModal } from './components/AuthModal';
 import { MotionProvider } from './components/ui/motion-provider';
 import { Toaster } from './components/ui/toaster';
+import { usePageMeta, type PageName } from './lib/pageMeta';
 import type { CatalogProduct } from './types';
 
-type Page = 'home' | 'mockup' | 'contact' | 'build-order' | 'catalog' | 'portal';
+type Page = PageName;
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [selectedProductForMockup, setSelectedProductForMockup] = useState<CatalogProduct | null>(null);
+
+  usePageMeta(currentPage);
 
   const navigateTo = (page: Page) => {
     if (page !== 'mockup') {
@@ -54,10 +60,19 @@ function App() {
           <main className="flex-grow">
             {currentPage === 'home' && (
               <>
-                <Hero onStartDesigning={() => navigateTo('build-order')} />
-                <About />
+                <Hero
+                  onShopCatalog={() => navigateTo('catalog')}
+                  onStartProject={() => navigateTo('build-order')}
+                />
+                <Reviews />
+                <TrustedBy />
+                <CatalogMarquee onNavigateToCatalog={() => navigateTo('catalog')} />
                 <Services />
-                <BottomCTA onStartDesigning={() => navigateTo('build-order')} />
+                <Faq />
+                <BottomCTA
+                onStartDesigning={() => navigateTo('build-order')}
+                onBrowseCatalog={() => navigateTo('catalog')}
+              />
               </>
             )}
 

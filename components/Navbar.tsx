@@ -42,8 +42,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     useAuth();
   const { openDrawer } = useCartDrawer();
 
-  // Transparent over the dark hero; cream surface elsewhere or when scrolled.
-  const overHero = currentPage === 'home' && !scrolled;
+  // The homepage hero is now light (cream), so the navbar always uses the
+  // cream surface with dark text — never the old transparent/light-text mode.
+  const overHero = false;
 
   useMotionValueEvent(scrollY, 'change', (latest) => {
     const previous = scrollY.getPrevious() ?? 0;
@@ -85,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               : 'border-b border-lsl-stone/70 bg-lsl-cream/85 backdrop-blur-md',
           )}
         >
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:h-[72px] md:px-10">
+          <div className="mx-auto flex h-16 max-w-[88rem] items-center justify-between px-6 md:h-[72px] md:px-10">
             <button
               type="button"
               onClick={goHome}
