@@ -5,6 +5,7 @@ import { Reviews } from './components/Reviews';
 import { TrustedBy } from './components/TrustedBy';
 import { CatalogMarquee } from './components/CatalogMarquee';
 import { Services } from './components/Services';
+import { AreasServed } from './components/AreasServed';
 import { Faq } from './components/Faq';
 import { Footer } from './components/Footer';
 
@@ -68,6 +69,7 @@ function App() {
                 <TrustedBy />
                 <CatalogMarquee onNavigateToCatalog={() => navigateTo('catalog')} />
                 <Services />
+                <AreasServed />
                 <Faq />
                 <BottomCTA
                 onStartDesigning={() => navigateTo('build-order')}

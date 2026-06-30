@@ -2,6 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Facebook, Mail, MapPin, Phone } from 'lucide-react';
 
+import { CITIES } from '../seo/cities';
+import { SERVICES } from '../seo/services';
+
 const columnVariants = {
   hidden: { opacity: 0, y: 16 },
   show: (i: number) => ({
@@ -117,12 +120,47 @@ export const Footer: React.FC = () => {
           </motion.div>
         </div>
 
+        <div className="mt-16 grid gap-10 border-t border-lsl-cream/10 pt-10 md:grid-cols-2">
+          <div>
+            <h4 className="font-sans text-sm font-semibold text-lsl-cream/70">
+              Services
+            </h4>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+              {SERVICES.map((svc) => (
+                <a
+                  key={svc.slug}
+                  href={`/services/${svc.slug}/`}
+                  className="text-sm text-lsl-cream/75 transition-colors hover:text-lsl-cream"
+                >
+                  {svc.name}
+                </a>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="font-sans text-sm font-semibold text-lsl-cream/70">
+              Areas served
+            </h4>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+              {CITIES.map((city) => (
+                <a
+                  key={city.slug}
+                  href={`/areas/${city.slug}/`}
+                  className="text-sm text-lsl-cream/75 transition-colors hover:text-lsl-cream"
+                >
+                  {city.name}, {city.region}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="mt-20 flex flex-col items-center justify-between gap-4 border-t border-lsl-cream/10 pt-8 text-sm text-lsl-cream/60 md:flex-row"
+          className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-lsl-cream/10 pt-8 text-sm text-lsl-cream/60 md:flex-row"
         >
           <p>
             © {new Date().getFullYear()} Left Side Logos · Missouri Born &amp; Raised

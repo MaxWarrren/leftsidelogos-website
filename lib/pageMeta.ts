@@ -12,7 +12,7 @@ type Meta = { title: string; description: string; noindex?: boolean };
 
 const PAGE_META: Record<PageName, Meta> = {
   home: {
-    title: "Custom Apparel & Embroidery in O'Fallon, MO | Left Side Logos",
+    title: "Custom T-Shirts & Apparel in O'Fallon, MO | Left Side Logos",
     description:
       "Left Side Logos makes custom embroidery, screen printing, and team apparel in O'Fallon, MO. 10,000+ orders fulfilled, 100% in-house, 2–3 week turnaround.",
   },
